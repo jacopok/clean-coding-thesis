@@ -170,25 +170,94 @@ we may extract its contribution from noisy data.
 The integrals above are optimal if the case of white noise, but going back to the actually-measured
 data the procedure is slightly more complicated. 
 
-Now, I will state without proof 
-is to estimate the noise power spectral density (noise power per frequency bin) $S_n(f)$,
-and to define with it the scalar product between timeseries $d(t)$ and $h(t)$ in terms 
+Now, jumping ahead to the final result: 
+we need to estimate the noise power spectral density (noise power per frequency bin) $S_n(f)$,
+and use to define with it the scalar product between timeseries $d(t)$ and $h(t)$ in terms 
 of their Fourier transforms $\widetilde{d}(f)$ and $\widetilde{h}(f)$ as follows:
 
 $$ (d | h) = 4 \Re \int _0^{ \infty } \frac{\widetilde{d}(f) \widetilde{h}(f)}{S_n(f)}\mathrm{d}f
 $$
 
+This product is the basis for signal searches, which are performed by
+looking for peaks in the following function of $t$:
 
+$$ (\text{observed strain data }d | h \text{ shifted by a time }t)
+$$
+
+for a selection ("template bank") of plausible signals $h$ we might see.
+
+Similarly, parameter estimation for any observed signal $d$ is performed by 
+exploring the posterior defined by the likelihood 
+
+$$ 
+\mathcal{L} (d | \theta ) 
+= \mathcal{N} \exp \left(- \frac{1}{2} (d - h(\theta )| d - h(\theta ))\right)
+$$
+
+where $\mathcal{N}$ is an irrelevant normalization. 
 
 ### Fisher matrix error estimation
 
+Up to now we discussed the analysis of current data; the question `GWFish` seeks to answer, 
+on the other hand, pertains to data taken by detectors we have not built yet.
+We can, however, make estimates as to what their noise level will be and go from there. 
 
+So, suppose we ask: 
+
+> Given the estimated noise curve of the planned Einstein Telescope gravitational wave interferometer,
+> suppose that two black holes with masses $M_1 = M_2 = 30 M_{\odot}$ (solar masses)
+> merge at a distance of $10^9$ light years from Earth.^[The problem as stated is under-specified,
+> there are several other parameters to consider, but let us keep it simple here.] 
+> How well could we measure their masses, distance, and position from the gravitational wave data?
+
+The "proper" way to answer this question would be to simulate noise distributed according
+to the given noise curve, add the known signal to it, and analyze it as if it were real data.
+This can be done, and it _is_ done to a certain extent, but it is very expensive: a single analysis of this kind takes
+several hours to days (for current detectors as well, but there we know it to be worth it since it's actual
+astrophysical data).
+
+This prevents us from exploring things such as the dependence of the results on things 
+such as the masses of the black holes, the distance and so on, as that requires re-doing 
+the aforementioned analysis several times.
+The solution (or at least a partial one) is to make an approximation, 
+called the _Fisher matrix approximation_: basically, we take the aforementioned likelihood, 
+and approximate it as a multivariate Gaussian in the parameters $\theta$, with mean given by the values we selected.
+Then, we may compute its covariance matrix by looking at the (negative expectation value of the) 
+Hessian of $\log \mathcal{L}$ computed at that maximum-likelihood point, which is called the Fisher matrix:
+
+$$ \mathcal{F}_{ij} = - \mathbb{E} \left( 
+  \frac{\partial}{\partial \theta _i} 
+  \frac{\partial}{\partial \theta _j}  
+  \log \mathcal{L} (d | \theta )
+\right)
+=  \mathbb{E}
+\frac{\partial}{\partial \theta _i} 
+\frac{\partial}{\partial \theta _j}  
+\left( \frac{1}{2} (d - h(\theta )| d - h(\theta )) \right)
+$$
+
+Taking the expectation value amounts to looking at the case in which the noise equals zero, 
+i.e. $d-h(\theta) = 0$; going through the derivatives we find that the only non-vanishing contribution is
+$\mathcal{F}_{ij} = (\partial_i h | \partial_j h)$, again evaluated at the maximum likelihood point.
+
+This is the basic quantity `GWFish` is computing; we are approximating the likelihood as a 
+Gaussian in the form $\log \mathcal{L} \sim - \theta_i \mathcal{F}_{ij} \theta _j / 2$ (with the 
+[Einstein summation convention](https://en.wikipedia.org/wiki/Einstein_notation)). 
+We may then use the properties of multivariate Gaussians, and state that our estimate for 
+the variance of parameter $i$ is given in terms of the diagonal components of the inverse of $\mathcal{F}$:
+
+$$ \sigma^2 _i \approx (\mathcal{F}^{-1})_{ii}\,.
+$$
 
 # Documentation
 
 A crucial aspect in software usability is the presence of good documentation.
 In my experience, when this is brought up people's mind often goes to "comments
-in the code", but 
+in the code"; but these are not proper _documentation_. 
+Documentation is meant for the _user_ of our code, while line comments 
+are at best useful for future developers.
+
+[@martinCleanCodeHandbook2008]
 
 ## The diátaxis framework
 
@@ -197,9 +266,12 @@ allows us to structure our thinking about documentation
 according to the needs of the user, as opposed to our convenience
 when writing the code.
 
-This document here is written to be mostly in the _tutorial_ category,
-giving an example with concrete steps meant for study, which will not 
-be directly applicable to users' code but which will 
+Although it is not software documentation exactly, let me state that 
+this document here is written to be mostly in the _tutorial_ category,
+giving examples with concrete steps meant for study, which will not 
+be directly applicable to users' code.
+An exception for this is the introductory section, which falls 
+in the _explanation_ category.
 
 ## Documentation for GWFish
 
@@ -214,16 +286,7 @@ We start by outlining what this section of code is doing.
 ### Fisher matrix inversion and singularity issues
 
 Within `GWFish`, an important step is the inversion of the Fisher matrix, which is 
-defined as 
-
-$$ F_{ij} = \left( \left.\frac{\partial h}{\partial \theta _i} \right| \frac{\partial h}{\partial \theta _j}\right)\,.
-$$
-
-Its inversion is required since the estimates for the errors on single parameters
-are given by the diagonal entries in its inverse: 
-
-$$ \sigma _i \approx (F^{-1})_{ii}\,.
-$$
+required in order to provide estimates of the errors on the parameters.
 
 This by itself does not seem like a difficult task computationally: 
 after all, the matrices at hand are not very large (on the order of $10\times 10$). 
@@ -352,7 +415,7 @@ What happens if the test fails? Here, `pytest` really shines:
 let us change one of the numbers in the should-be inverse, and re-run the same 
 command:
 
-```bash
+```python
 $ pytest
 ============================= test session starts ==============================
 platform linux -- Python 3.9.11, pytest-7.1.3, pluggy-1.0.0
@@ -406,14 +469,15 @@ possibilities.
 
 The shell looks like this:
 
-```bash
+```python
 $ pytest --pdb
 [... same output as before ...]
 test_matrix_inverse.py:10: AssertionError
 >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> entering PDB >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 >>>>>>>>>>>>>>>>>> PDB post_mortem (IO-capturing turned off) >>>>>>>>>>>>>>>>>>>
-> /home/jacopo/Documents/clean-coding-thesis/scripts/testing_2/test_matrix_inverse.py(10)test_matrix_inversion()
+> /home/jacopo/Documents/clean-coding-thesis/scripts/testing_2/
+  test_matrix_inverse.py(10)test_matrix_inversion()
 -> assert np.allclose(inverse, inverse_should_be)
 (Pdb) matrix @ inverse
 array([[ 1.00000000e+00, -1.11022302e-16],
@@ -435,6 +499,7 @@ a shell prompt `(Pdb)`, from which I could give arbitrary `python` commands.
 I used it to compute the matrix product between the initial matrix
 and the computed inverse, and the same between the manually-written inverse,
 which showed that the computed inverse was indeed correct.
+
 
 # Code structure
 
