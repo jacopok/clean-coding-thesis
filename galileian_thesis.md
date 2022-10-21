@@ -134,7 +134,51 @@ the trend at low frequency continues and the amplitude for $f \sim \qty{1}{Hz}$ 
 This detector is _not sensitive_ to signals with very low frequency, but it _is_ sensitive to 
 signals with frequencies in a band around 100Hz. 
 
-The first step towards 
+The first step towards actually measuring something lies in 
+_whitening_ the measured data, that is, dividing every Fourier component by its root-mean-square value. 
+After this procedure, our data looks like this:
+
+![Whitened strain](figures/whitened.pdf)
+
+and still, no signal is visible!
+This is because the signal present in these data has high frequency and low amplitude; specifically, if we were to plot it 
+together with these data, it would look like this: 
+
+![Whitened strain and signal](figures/true_signal.pdf)
+
+So, how can we possibly detect something that is so far smaller in amplitude than our data?
+
+The trick lies in a technique called _matched filtering_. in which 
+we use the fact that, if our measured data is $d(t) = n(t) + s(t)$, 
+with $n(t)$ being the noise and $s(t)$ being the astrophysial signal (suppose here 
+that it is monochromatic for simplicity), then a temporal integral in the form 
+
+$$ I
+= \frac{1}{T} \int d(t) s(t) \mathrm{d}t 
+= \underbrace{\frac{1}{T} \int n(t) s(t) \mathrm{d}t}_{I_n} +
+\underbrace{\frac{1}{T} \int s(t) s(t) \mathrm{d}t}_{I_s}\,,
+$$
+
+where $T$ is the length of the integration period, has two components: 
+$I_s$ is the average square magnitude of the signal, and it approaches a constant;
+on the other hand, $I_n$ varies stochastically with $n$, but since $n$ and $s$ have 
+no reason to be correlated the integral will be a random process with variance $T$, 
+and due to the division by $T$ this term will decay like $I_n \sim T^{-1/2}$.
+
+This is the essence of gravitational data analysis: if we know the expected signal ahead of time,
+we may extract its contribution from noisy data. 
+The integrals above are optimal if the case of white noise, but going back to the actually-measured
+data the procedure is slightly more complicated. 
+
+Now, I will state without proof 
+is to estimate the noise power spectral density (noise power per frequency bin) $S_n(f)$,
+and to define with it the scalar product between timeseries $d(t)$ and $h(t)$ in terms 
+of their Fourier transforms $\widetilde{d}(f)$ and $\widetilde{h}(f)$ as follows:
+
+$$ (d | h) = 4 \Re \int _0^{ \infty } \frac{\widetilde{d}(f) \widetilde{h}(f)}{S_n(f)}\mathrm{d}f
+$$
+
+
 
 ### Fisher matrix error estimation
 
@@ -143,8 +187,8 @@ The first step towards
 # Documentation
 
 A crucial aspect in software usability is the presence of good documentation.
-In my experience, when this is brought up people's mind often goes to comments
-in the code, but 
+In my experience, when this is brought up people's mind often goes to "comments
+in the code", but 
 
 ## The diátaxis framework
 
@@ -153,15 +197,21 @@ allows us to structure our thinking about documentation
 according to the needs of the user, as opposed to our convenience
 when writing the code.
 
-
+This document here is written to be mostly in the _tutorial_ category,
+giving an example with concrete steps meant for study, which will not 
+be directly applicable to users' code but which will 
 
 ## Documentation for GWFish
 
 # Testing
 
-## Testing GWFish
+## Unit testing for matrix inversion
 
-### Unit testing for matrix inversion
+This section showcases how unit tests can be added to a relatively 
+simple section of code.
+We start by outlining what this section of code is doing.
+
+### Fisher matrix inversion and singularity issues
 
 Within `GWFish`, an important step is the inversion of the Fisher matrix, which is 
 defined as 
@@ -176,8 +226,215 @@ $$ \sigma _i \approx (F^{-1})_{ii}\,.
 $$
 
 This by itself does not seem like a difficult task computationally: 
-after all, the matrices at hand are not very large (on the order of $10\times 10$),
+after all, the matrices at hand are not very large (on the order of $10\times 10$). 
+However, issues do arise due to the differences in the magnitude 
+between the various components.
 
+Because of them, the code which does the inversion within `GWFish` looks like this:
+
+```python
+import numpy as np
+
+def invertSVD(matrix):
+    thresh = 1e-10
+
+    dm = np.sqrt(np.diag(matrix))
+    normalizer = np.outer(dm, dm)
+    matrix_norm = matrix / normalizer
+
+    [U, S, Vh] = np.linalg.svd(matrix_norm)
+
+    kVal = sum(S > thresh)
+    matrix_inverse_norm = U[:, 0:kVal] @ np.diag(1. / S[0:kVal]) @ Vh[0:kVal, :]
+
+    return matrix_inverse_norm / normalizer
+```
+
+Let us leave the mathematical details aside and think like computer scientists.
+This code should invert a matrix: does it do that?
+
+### The simplest test
+
+Let us start by building the simplest kind of test possible, which will already allow
+us to showcase some ideas about automated testing.
+
+We can start by adding a testing function to the same script as the one in which the 
+`invertSVD` function is defined. 
+The basic paradigm in testing is, of course, to run the code with some input 
+and see whether it produces the correct result.
+We will eventually need these test inputs to include high-dimensional, 
+singular or nearly singular matrices, but let us start small. 
+We will use a symmetric matrix, since all Fisher matrices are symmetric,
+and since the algorithm used for the normalization breaks down otherwise.
+
+```python
+def test_matrix_inversion():
+
+    matrix = np.array([[1, 3], [3, 4]])
+    inverse = invertSVD(matrix)
+
+    inverse_should_be = np.array([[-4/5, 3/5], [3/5, -1/5]])
+    return np.allclose(inverse, inverse_should_be)
+
+if __name__ == '__main__':
+    print(test_matrix_inversion())
+```
+
+As expected, when running the script we get the result `True`;
+on the other hand, if we change one of the numbers in the `inverse_should_be` 
+matrix we get `False`.
+
+Several problems with this appear right away: do we really need to manually 
+compute matrix inverses to test our code?
+We will get to that; first, though, let us _refactor_ our test.
+
+As is, we need to actively look at the output of the script in order to 
+see whether our test has succeeded or failed.
+Also, the test and the actual code live in the same file, which is not 
+great: as we add more tests, it will become a source of clutter.
+
+### Using `pytest`
+
+Our first refactoring step lies in moving the test code to its own script.
+Also, as opposed to returning a boolean value, we will use an `assert` statement,
+as is common when using `pytest`. 
+
+`assert` is a convenient tool for debugging and testing: 
+a statement like `assert x` will not do anything if `x` is truthy, 
+while it will fail with an `AssertionError` if `x` is falsey.
+
+So, our code will look like:
+
+```python
+from gwfish_matrix_inverse import invertSVD
+import numpy as np
+
+def test_matrix_inversion():
+
+    matrix = np.array([[1, 3], [3, 4]])
+    inverse = invertSVD(matrix)
+
+    inverse_should_be = np.array([[-4/5, 3/5], [3/5, -1/5]])
+    assert np.allclose(inverse, inverse_should_be)
+
+if __name__ == '__main__':
+    test_matrix_inversion()
+```
+
+and, unlike before, it will now not output anything if everything is working
+correctly, and raise an error if not (try it!).
+
+The next step is to try the same thing with the `pytest` library.
+We first need to install it (`pip install pytest`); after that, in 
+the folder containing these files, we may simply run:
+
+```bash
+$ pytest
+============================= test session starts ==============================
+platform linux -- Python 3.9.11, pytest-7.1.3, pluggy-1.0.0
+rootdir: /home/jacopo/Documents/clean-coding-thesis/scripts/testing_2
+collected 1 item                                                               
+
+test_matrix_inverse.py .                                                 [100%]
+
+============================== 1 passed in 0.07s ===============================
+```
+
+`pytest` is able to go through the files in the folder, see that 
+one of them has a name starting with `test_`, inside it 
+there's a function starting with `test_`, run that function, find no 
+errors, give us a success!
+
+Note that now calling the function `test_matrix_inversion` in the script is not
+required anymore: we may safely remove those last two lines.
+
+What happens if the test fails? Here, `pytest` really shines: 
+let us change one of the numbers in the should-be inverse, and re-run the same 
+command:
+
+```bash
+$ pytest
+============================= test session starts ==============================
+platform linux -- Python 3.9.11, pytest-7.1.3, pluggy-1.0.0
+rootdir: /home/jacopo/Documents/clean-coding-thesis/scripts/testing_2
+collected 1 item                                                               
+
+test_matrix_inverse.py F                                                 [100%]
+
+=================================== FAILURES ===================================
+____________________________ test_matrix_inversion _____________________________
+
+    def test_matrix_inversion():
+    
+        matrix = np.array([[1, 3], [3, 4]])
+        inverse = invertSVD(matrix)
+    
+        inverse_should_be = np.array([[-4/5, 3/6], [3/5, -1/5]])
+>       assert np.allclose(inverse, inverse_should_be)
+E       assert False
+E        +  where False = <function allclose at 0x7f25d5d27280>(array([[-0.8,  0.6],
+       [ 0.6, -0.2]]), array([[-0.8,  0.5],\n       [ 0.6, -0.2]]))
+E        +    where <function allclose at 0x7f25d5d27280> = np.allclose
+
+test_matrix_inverse.py:10: AssertionError
+=========================== short test summary info ============================
+FAILED test_matrix_inverse.py::test_matrix_inversion - assert False
+============================== 1 failed in 0.12s ===============================
+```
+
+`pytest` ran our test code and found an error.
+It tells us exactly where it found it, and specifically how it came about:
+we used the `np.allclose` function to check for the equality of two matrices 
+which it prints out, so we can see at a glance what has gone wrong. 
+
+Of course, we might not understand where the problem is right away in general,
+but this all is about convenience, and having the tools at hand to spot 
+as many details as possible.
+
+#### Debugging
+
+Often, the information shown by `pytest` will still not be enough. 
+A really convenient thing to be able to do, then, is to start from the 
+failure and work interactively with the variables defined at that time:
+this way, we can do all sorts of manipulations, or even make plots if we 
+want!
+
+This is easily achieved by adding the `--pdb` flag to our call to `pytest`.
+`pdb`, "python debugger", is a standard tool for debugging, and it has
+plenty of features worth exploring. Here I will give just a flavor of the 
+possibilities. 
+
+The shell looks like this:
+
+```bash
+$ pytest --pdb
+[... same output as before ...]
+test_matrix_inverse.py:10: AssertionError
+>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> entering PDB >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+>>>>>>>>>>>>>>>>>> PDB post_mortem (IO-capturing turned off) >>>>>>>>>>>>>>>>>>>
+> /home/jacopo/Documents/clean-coding-thesis/scripts/testing_2/test_matrix_inverse.py(10)test_matrix_inversion()
+-> assert np.allclose(inverse, inverse_should_be)
+(Pdb) matrix @ inverse
+array([[ 1.00000000e+00, -1.11022302e-16],
+       [ 4.44089210e-16,  1.00000000e+00]])
+(Pdb) matrix @ inverse_should_be
+array([[ 1.0000000e+00, -1.0000000e-01],
+       [-4.4408921e-16,  7.0000000e-01]])
+(Pdb) q
+
+
+=========================== short test summary info ============================
+FAILED test_matrix_inverse.py::test_matrix_inversion - assert False
+!!!!!!!!!!!!!!!!!!! _pytest.outcomes.Exit: Quitting debugger !!!!!!!!!!!!!!!!!!!
+```
+
+It is hard to show in a fixed medium such as this, but I was presented with 
+a shell prompt `(Pdb)`, from which I could give arbitrary `python` commands.
+
+I used it to compute the matrix product between the initial matrix
+and the computed inverse, and the same between the manually-written inverse,
+which showed that the computed inverse was indeed correct.
 
 # Code structure
 
