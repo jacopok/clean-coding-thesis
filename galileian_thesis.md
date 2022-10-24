@@ -37,6 +37,7 @@ hyperrefoptions:
 Scientists notoriously write bad code.
 This is a thorny statement, and it should be qualified: code may be "bad" 
 according to the standards of companies, but if its purpose is the investigation 
+of some scientific 
 
 Using `GWFish` [@harmsGWFishSimulationSoftware2022] to demostrate 
 these software practices is something of a perfect storm. 
@@ -74,11 +75,6 @@ gravitational waves?
 These instruments are big, expensive projects, therefore a careful scientific
 evaluation of what we think a new detector concept might be able to 
 accomplish is crucial when outlining a funding proposal.
-
-<!-- We have experimental evidence that, at least at a basic level, our understanding
-of how gravitational waves are generated and propagate through space 
-is correct; therefore, the typical procedure is to extrapolate this knowledge 
-in order to evaluate  -->
 
 The basic questions we wish to answer for any new detector concept are:
 
@@ -241,23 +237,35 @@ i.e. $d-h(\theta) = 0$; going through the derivatives we find that the only non-
 $\mathcal{F}_{ij} = (\partial_i h | \partial_j h)$, again evaluated at the maximum likelihood point.
 
 This is the basic quantity `GWFish` is computing; we are approximating the likelihood as a 
-Gaussian in the form $\log \mathcal{L} \sim - \theta_i \mathcal{F}_{ij} \theta _j / 2$ (with the 
-[Einstein summation convention](https://en.wikipedia.org/wiki/Einstein_notation)). 
+Gaussian in the form $\log \mathcal{L} \sim - \Delta\theta_i \mathcal{F}_{ij} \Delta\theta _j / 2$ (with the 
+[Einstein summation convention](https://en.wikipedia.org/wiki/Einstein_notation)), where $\Delta \theta = \theta - \overline{\theta}$
+is the deviation of the parameter vector $\theta$ from its mean value $\overline{\theta}$. 
 We may then use the properties of multivariate Gaussians, and state that our estimate for 
 the variance of parameter $i$ is given in terms of the diagonal components of the inverse of $\mathcal{F}$:
 
 $$ \sigma^2 _i \approx (\mathcal{F}^{-1})_{ii}\,.
 $$
 
+This is a frequentist phrasing; alternatively, it is equivalent to a Bayesian one
+if we take a flat prior on the parameters, $p(\theta ) = \text{const}$. 
+This is surely not ultimately correct (for example, a flat prior on angular variables
+is not flat on the sphere), but the Fisher matrix approximation is ultimately
+quite rough itself, therefore including non-flat priors is likely not the primary concern. 
+
 # Documentation
 
 A crucial aspect in software usability is the presence of good documentation.
-In my experience, when this is brought up people's mind often goes to "comments
-in the code"; but these are not proper _documentation_. 
+
+In my experience, when documentation is brought up people's mind often goes to comments
+in the code, or line comments; but these are not proper _documentation_. 
 Documentation is meant for the _user_ of our code, while line comments 
 are at best useful for future developers.
+As Clean Code [@martinCleanCodeHandbook2008] puts it, line comments are a 
+"necessary evil".
 
-[@martinCleanCodeHandbook2008]
+Sometimes, a simple-looking piece of code has a counterintuitive element,
+which may be clarified by a quick line comment; however, in most of their typical
+uses 
 
 ## The diátaxis framework
 
@@ -266,22 +274,103 @@ allows us to structure our thinking about documentation
 according to the needs of the user, as opposed to our convenience
 when writing the code.
 
-Although it is not software documentation exactly, let me state that 
-this document here is written to be mostly in the _tutorial_ category,
-giving examples with concrete steps meant for study, which will not 
-be directly applicable to users' code.
-An exception for this is the introductory section, which falls 
-in the _explanation_ category.
+The website referenced above does an excellent job of explaining its 
+categories, I will just give a quick summary here.
+The classification is along two axes: the first is based on whether
+the piece of documentation is meant to be used while studying or while 
+working, while the second is based on whether the piece of documentation
+contains pratical steps or theoretical knowledge.
+Based on this, they distinguish the following categories:
 
-## Documentation for GWFish
+1. __tutorials__ show the user at study practical steps in a safe environment:
+  they are meant to show them how to get started using the software;
+1. __how-to guides__ show the user at work practical steps in the real world:
+  they are meant to show them how to accomplish some practical goal;
+1. __reference material__ describes software in a way that is helpful for 
+  a user at work, by listing its features, providing examples _etc._;
+1. __explanation__ discusses the sofware broadly and theoretically,
+  and is therefore meant for a user at study.
+
+Reference material may be auto-generated in certain cases: for example, 
+the documentation-formatting software for Python
+[`sphinx`](https://www.sphinx-doc.org/en/master/) has an 
+[`autodoc`](https://www.sphinx-doc.org/en/master/usage/extensions/autodoc.html)
+extension which can read function and class docstrings and 
+extract them into HTML documentation.
+This, however, is not the be-all and end-all of documentation, and it is arguably
+not even the most important part of it.
+
+### Documentation for GWFish
+
+Writing documentation may be a chore, and finding time to do it 
+is difficult; also, the writing aspect itself is not something I'm 
+particularly qualified to comment on.
+Therefore, this section is simply devoted to the thought process behind 
+the [documentation I wrote for `GWFish`](https://gwfish.readthedocs.io/en/latest/),
+and how it grew organically from user requirements.
+
+I started writing it when I was asked to give a short tutorial on the usage of this
+piece of software for people working on another gravitational wave detector proposal,
+LGWA [@harmsLunarGravitationalwaveAntenna2021].
+Having a spoken tutorial refer to written documentation is helpful, therefore
+I wrote down the tutorial as a documentation page.
+I used [`sphinx`](https://www.sphinx-doc.org/en/master/) combined with 
+[`readthedocs`](https://readthedocs.org/) to make it so documentation could
+be version-tracked in the same repository as the code, as well as be deployed
+automatically whenever changes were made there.
+
+
 
 # Testing
+
+We should make sure the code we write works.
+That is fairly uncontroversial, but the way we practically do these tests is 
+definitely nontrivial.
+
+Often, what is tested is the end-to-end result of the code, but not the 
+intermediate steps; these may only be tested informally, in an _ad hoc_ way, 
+if at all.
+
+In the `GWFish` case, end-to-end testing was performed by way of a comparison
+with alternative software which did the same computations.
+Specifically, cross-checks were performed between `GWFish`, `GWFast` [@iacovelliForecastingDetectionCapabilities2022]
+and `GWBench` [@borhanianGwbenchNovelFisher2021] as an activity within the 
+[Einstein Telescope Observational Science Board](https://www.et-gw.eu/index.php/observational-science-board),
+which is an organization dedicated to developing the science case for the Einstein 
+Telescope proposal. 
+Since all these pieces of software are working with the same assumptions ---
+Fisher matrix approximation, the same parametrization for the planned detectors,
+_etc._ --- they should yield the same end result, and indeed, they do, 
+at least for the situations considered.
+This effort can give us confidence that the current versions of all codes are working correctly
+--- reaching the same, wrong result with three independent approaches is possible but unlikely.
+
+This kind of testing is definitely useful, but it is not the main subject of this section.
+What we will discuss instead is how to make an automated test suite, which can be expanded
+as more features are added to the code, and which may be made complete enough that the fact
+it passes may give us a reasonable degree of confidence that our code is working sensibly.
+
+We will not prove our code correct, but we can construct a series of checks that it is
+not failing in any silly way. This simplifies the development process significantly, since
+we can check at any time whether we have broken anything.
+Also, it is not too difficult an extension to run our test suite in an isolated environment
+with different software versions; this way we can make an informed claim about which 
+ones our software supports and which it doesn't.
+
+The golden standard in this regard is called _test driven development_, in which a workflow is adopted
+in which a test is written _before_ the code which implements the feature it is testing.
+This has several advantages, among which: it forces us to think about what we precisely require 
+the code we are writing to do _before writing it_, it ensures our test suite grows organically
+with the code we write, it forces us to write testable, modular code.
+
+Before getting to that, however, we shall discuss the simpler task of how to test existing code:
+what paradigms and techniques we can use to construct good and convenient tests?
 
 ## Unit testing for matrix inversion
 
 This section showcases how unit tests can be added to a relatively 
-simple section of code.
-We start by outlining what this section of code is doing.
+simple section of code: a function within `GWFish` meant to invert matrices, 
+with some extra restrictions.
 
 ### Fisher matrix inversion and singularity issues
 
@@ -322,7 +411,7 @@ Let us start by building the simplest kind of test possible, which will already 
 us to showcase some ideas about automated testing.
 
 We can start by adding a testing function to the same script as the one in which the 
-`invertSVD` function is defined. 
+`invertSVD` function is defined.
 The basic paradigm in testing is, of course, to run the code with some input 
 and see whether it produces the correct result.
 We will eventually need these test inputs to include high-dimensional, 
@@ -500,7 +589,113 @@ I used it to compute the matrix product between the initial matrix
 and the computed inverse, and the same between the manually-written inverse,
 which showed that the computed inverse was indeed correct.
 
+### Property-based testing
+
+So far, we have tested the output of our code against a manually computed "correct result".
+This is OK as far as it goes, but is necessarily only checks a few examples 
+which we hope will be relevant, but which might not cover all edge cases.
+
+In many situations, we may be able to find an _invariant_ in our code, which 
+we expect to hold regardless of input. 
+In this matrix inversion scenario, this is particularly simple: the defining property
+of the inverse $A^{-1}$ of a matrix $A$ is that $A^{-1} A = A A^{-1} = 1$.
+
+The first step in this direction is to refactor our test so that it can accept
+any matrix: the following implementation uses the same matrix as before, 
+but now we check the aforementioned property as opposed to the specific inverse.
+
+```python
+MATRIX = np.array([[1, 3], [3, 4]])
+
+def test_matrix_inversion_constant_matrix(matrix = MATRIX):
+
+    inverse = invertSVD(matrix)
+
+    assert np.allclose(inverse@matrix, np.eye(*matrix.shape))
+    assert np.allclose(matrix@inverse, np.eye(*matrix.shape))
+```
+
+This is the first step; what we could now do is to make a method which generates
+random matrices and feed it to the algorithm.
+There is, however, a better way, thanks to the 
+[`hypothesis`](https://hypothesis.readthedocs.io/en/latest/index.html) library.
+We are starting out on a fairly complex example (a matrix full of floating 
+point numbers), but it can be done.
+
+After installing `hypothesis` with the `numpy` extra (`pip install hypothesis[numpy]`),
+we may use it as follows:
+
+```python
+from gwfish_matrix_inverse import invertSVD
+import numpy as np
+from hypothesis import given
+from hypothesis import strategies as st
+from hypothesis.extra.numpy import arrays
+
+@given(arrays(np.float64, (2, 2)))
+def test_matrix_inversion_hypothesis(matrix):
+    
+    inverse = invertSVD(matrix)
+
+    assert np.allclose(inverse@matrix, np.eye(*matrix.shape))
+    assert np.allclose(matrix@inverse, np.eye(*matrix.shape))
+```
+
+The `@given` decorator is what tells `hypothesis` to provide us with some
+test data, of the kind specified in its argument: for us, numpy `arrays`. 
+We then specify the data type (floating point numbers), the shape (which 
+for now we keep as 2x2, we will generalize this later), and any extra conditions.
+
+If we run this, we get an immediate failure: I will not clutter 
+this document with the full output, but the command to run is still `pytest`, 
+which fails by raising an error in the SVD step with the falsifying example:
+
+$$ A = \left[\begin{array}{cc}
+0 & 0 \\ 
+0 & 0
+\end{array}\right]
+$$
+
+OK, fair enough, the inverse of the zero matrix does not exist. 
+We can restrict the examples proposed by modifying the decorator to read:
+
+```python
+from gwfish_matrix_inverse import invertSVD
+import numpy as np
+from hypothesis import given
+from hypothesis import strategies as st
+from hypothesis.extra.numpy import arrays
+
+@given(arrays(np.float64, (2, 2), elements=st.floats(min_value=1e-20)))
+def test_matrix_inversion_hypothesis(matrix):
+    
+    inverse = invertSVD(matrix)
+
+    assert np.allclose(inverse@matrix, np.eye(*matrix.shape))
+    assert np.allclose(matrix@inverse, np.eye(*matrix.shape))
+```
+
+Now we will not get zeros, but this test still fails, with falsifying example
+
+$$ A = \left[\begin{array}{cc}
+1 & 1 \\ 
+1 & 1
+\end{array}\right]
+$$
+
+a singular matrix, with no multiplicative inverse.
+Interestingly, our algorithm does give a "result", 
+
+$$ A^{-1} \overset{?}{=} \left[\begin{array}{cc}
+0.25 & 0.25 \\ 
+0.25 & 0.25
+\end{array}\right].
+$$
+
+This may seem pointless, but it is getting to a problem which really does occur 
+in these computations: the Fisher matrix $\mathcal{F}$ is indeed often 
+singular or nearly-singular, and it is important for our code to correctly deal with this.
 
 # Code structure
 
-## 
+# Bibliography
