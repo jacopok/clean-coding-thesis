@@ -1,16 +1,44 @@
 from gwfish_matrix_inverse import invertSVD
 import numpy as np
-from hypothesis import given
+from hypothesis import given, reject, target
 from hypothesis import strategies as st
 from hypothesis.extra.numpy import arrays
+import pytest
 
-@given(arrays(np.float64, (2, 2), elements=st.floats(min_value=1e-20)))
-def test_matrix_inversion_hypothesis(matrix):
-    
-    # matrix = np.maximum(matrix, matrix.T)
-    
-    inverse = np.linalg.inv(matrix)
-    # inverse = invertSVD(matrix)
+N=4
 
-    assert np.allclose(inverse@matrix, np.eye(*matrix.shape))
-    assert np.allclose(matrix@inverse, np.eye(*matrix.shape))
+@given(
+    vector_norms=arrays(
+        np.float64, 
+        (N,), 
+        elements=st.floats(
+            min_value=1e-3,
+            max_value=1e3,
+        ),
+        unique=True,
+    ),
+    cosines=arrays(
+        np.float64, 
+        (N,N,), 
+        elements=st.floats(
+            min_value=-1.0, 
+            max_value=1.0,
+        ),
+        unique=True,
+    ),
+)
+@pytest.mark.parametrize('inverter', [
+    np.linalg.pinv, 
+    invertSVD
+])
+def test_matrix_inversion_hypothesis(inverter, vector_norms, cosines):
+    
+    cosines[np.arange(N), np.arange(N)] = 1
+    cosines = np.maximum(cosines, cosines.T)
+    
+    matrix = np.outer(vector_norms, vector_norms) * cosines
+    
+    inverse = inverter(matrix)
+
+    assert np.allclose(inverse@matrix@inverse, inverse, atol=1e-3)
+    assert np.allclose(matrix@inverse@matrix, matrix, atol=1e-3)
