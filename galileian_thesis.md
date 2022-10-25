@@ -319,7 +319,11 @@ I used [`sphinx`](https://www.sphinx-doc.org/en/master/) combined with
 be version-tracked in the same repository as the code, as well as be deployed
 automatically whenever changes were made there.
 
-
+Since the aim of a tutorial is to introduce new users to the software, I focused
+mine on a simple test case: computing the Fisher Matrix errors for a single 
+signal, with a specific combination of detectors.
+The tutorial can be found [here](https://gwfish.readthedocs.io/en/latest/tutorials/tutorial_170817.html);
+it is not meant for 
 
 # Testing
 
@@ -697,5 +701,14 @@ in these computations: the Fisher matrix $\mathcal{F}$ is indeed often
 singular or nearly-singular, and it is important for our code to correctly deal with this.
 
 # Code structure
+
+Well-structured code is a hard target to reach, 
+but several small simple improvements and refactorings can help in steadily
+improving its usability.
+
+`GWFish` is packaged as a python package, with some additional helper scripts to 
+run it.
+
+
 
 # Bibliography
