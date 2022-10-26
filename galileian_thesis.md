@@ -320,10 +320,40 @@ be version-tracked in the same repository as the code, as well as be deployed
 automatically whenever changes were made there.
 
 Since the aim of a tutorial is to introduce new users to the software, I focused
-mine on a simple test case: computing the Fisher Matrix errors for a single 
+mine on a simple test case: computing the Fisher matrix errors for a single 
 signal, with a specific combination of detectors.
-The tutorial can be found [here](https://gwfish.readthedocs.io/en/latest/tutorials/tutorial_170817.html);
-it is not meant for 
+The tutorial is in two parts, 
+[here](https://gwfish.readthedocs.io/en/latest/tutorials/tutorial_170817.html)
+and 
+[here](https://gwfish.readthedocs.io/en/latest/tutorials/tutorial_randomization.html);
+it is basic in the sense that it assumes no prior knowledge of the software itself,
+but it does assume familiarity with the task of Fisher matrix forecasting.
+
+The tutorial provides runnable scripts and their expected output, with 
+an explanation of what that output means. It is computationally cheap, since
+it is meant to be a learning tool, not to solve any concrete problems.
+
+This was the starting point; after the architecture was built it was easy to 
+make small improvements to it and complement it with new information. 
+
+A few examples of things that were added are as follows:
+
+- the conventions for the naming of relevant parameters are not uniform,
+  therefore I added a [page](https://gwfish.readthedocs.io/en/latest/reference/parameters_units.html) 
+  to the _reference material_ section detailing 
+  the ones used by this code specifically;
+- a piece of functionality for this code is the computation of a detection 
+  horizon (i.e. the maximum distance at which a certain signal can be detected),
+  I discussed 
+  [the line of reasonining behind this computation](https://gwfish.readthedocs.io/en/latest/explanation/horizon.html) 
+  in the _explanation_ section;
+- users may want to add new, custom detectors to do their own experiments:
+  this was a good candidate for a very brief _how-to_ 
+  [page](https://gwfish.readthedocs.io/en/latest/how-to/adding_new_detectors.html), 
+  in which the steps to complete this real-world task are detailed; this page does
+  not discuss the details of all the possible configurations for the detector, 
+  since that is material best deferred to a 
+  [reference page](https://gwfish.readthedocs.io/en/latest/reference/detectors.html#).
 
 # Testing
 
@@ -350,7 +380,7 @@ This effort can give us confidence that the current versions of all codes are wo
 --- reaching the same, wrong result with three independent approaches is possible but unlikely.
 
 This kind of testing is definitely useful, but it is not the main subject of this section.
-What we will discuss instead is how to make an automated test suite, which can be expanded
+What we will discuss instead is how to make an _automated test suite_, which can be expanded
 as more features are added to the code, and which may be made complete enough that the fact
 it passes may give us a reasonable degree of confidence that our code is working sensibly.
 
@@ -706,9 +736,164 @@ Well-structured code is a hard target to reach,
 but several small simple improvements and refactorings can help in steadily
 improving its usability.
 
-`GWFish` is packaged as a python package, with some additional helper scripts to 
-run it.
+`GWFish` is released as a python package, with some additional helper scripts to 
+run it. [...]
+
+## Refactoring `analyzeFisherErrors`
+
+The computation of the errors from Fisher matrices in `GWFish` goes through a function 
+called `analyzeFisherErrors`, which takes the following parameters:
+
+- `network`, an object of type `Network`, which contains several `Detector` objects;
+- `parameter_values`, a `pandas` `DataFrame` with each row representing a signal, and 
+  with each column corresponding to a different event parameter (masses, distance etc.);
+- `fisher_parameters`, a list containing the aforementiond parameters in order;
+- `population`, a string containing the name of the population being considered;
+- `networks_ids`, a list of lists of integers, each between 0 and the number of detectors minus one.
+
+This function performs the following tasks for each of the sub-networks defined 
+by the `networks_ids` parameters:
+
+- compute the overall SNR as the root-mean-square of the individual SNRs;
+- compute the network Fisher matrix as the sum of the individual Fisher matrices;
+- compute the covariance matrix by inverting the network Fisher matrix;
+- compute the sky localization ellipse size, which is determined by the errors 
+  on the sky position angles (right ascension and declination);
+- write all the computed errors to a text file.
+
+The function does not return anything. The code is reported here for reference,
+with minor changes to allow for correct printing. The full one can be found in 
+[this snapshot of the repository](https://github.com/janosch314/GWFish/blob/c63023fe25ed703f30a79309d71035fd4839f24f/GWFish/modules/fishermatrix.py#L97).
+
+```python
+def analyzeFisherErrors(network, parameter_values, fisher_parameters, population, networks_ids):
+    """
+    Analyze parameter errors.
+    """
+
+    # Check if sky-location parameters are part of Fisher analysis. 
+    # If yes, sky-location error will be calculated.
+    signals_havesky = False
+    if ('ra' in fisher_parameters) and ('dec' in fisher_parameters):
+        signals_havesky = True
+        i_ra = fisher_parameters.index('ra')
+        i_dec = fisher_parameters.index('dec')
+    signals_haveids = False
+    if 'id' in parameter_values.columns:
+        signals_haveids = True
+        signal_ids = parameter_values['id']
+        parameter_values.drop('id', inplace=True, axis=1)
 
 
+    npar = len(fisher_parameters)
+    ns = len(network.detectors[0].fisher_matrix[:, 0, 0])  # number of signals
+    N = len(networks_ids)
+
+    detect_SNR = network.detection_SNR
+
+    network_names = []
+    for n in np.arange(N):
+        network_names.append('_'.join(
+          [network.detectors[k].name for k in networks_ids[n]])
+        )
+
+    for n in np.arange(N):
+        parameter_errors = np.zeros((ns, npar))
+        sky_localization = np.zeros((ns,))
+        networkSNR = np.zeros((ns,))
+        for d in networks_ids[n]:
+            networkSNR += network.detectors[d].SNR ** 2
+        networkSNR = np.sqrt(networkSNR)
+
+        for k in np.arange(ns):
+            network_fisher_matrix = np.zeros((npar, npar))
+
+            if networkSNR[k] > detect_SNR[1]:
+                for d in networks_ids[n]:
+                    if network.detectors[d].SNR[k] > detect_SNR[0]:
+                        network_fisher_matrix += np.squeeze(
+                          network.detectors[d].fisher_matrix[k, :, :])
+
+                if npar > 0:
+                    network_fisher_inverse = invertSVD(network_fisher_matrix)
+                    parameter_errors[k, :] = np.sqrt(
+                      np.diagonal(network_fisher_inverse))
+
+                    if signals_havesky:
+                        sky_localization[k] = (
+                          np.pi * np.abs(np.cos(parameter_values['dec'].iloc[k]))
+                          * np.sqrt(network_fisher_inverse[i_ra, i_ra]
+                          * network_fisher_inverse[i_dec, i_dec]
+                          - network_fisher_inverse[i_ra, i_dec]**2))
+        delim = " "
+        header = ('network_SNR '+delim.join(parameter_values.keys())+
+          " "+delim.join(["err_" + x for x in fisher_parameters])
+        )
+
+        ii = np.where(networkSNR > detect_SNR[1])[0]
+        save_data = np.c_[networkSNR[ii], 
+          parameter_values.iloc[ii], 
+          parameter_errors[ii, :]]
+        if signals_havesky:
+            header += " err_sky_location"
+            save_data = np.c_[save_data, sky_localization[ii]]
+        if signals_haveids:
+            header = "signal "+header
+            save_data = np.c_[signal_ids.iloc[ii], save_data]
+
+        file_name = ('Errors_' + network_names[n] + '_' 
+          + population + '_SNR' + str(detect_SNR[1]) + '.txt'
+          )
+
+        if signals_haveids and (len(save_data) > 0):
+            np.savetxt('Errors_' + network_names[n] + '_' 
+              + population + '_SNR' + str(detect_SNR[1]) + '.txt',
+              save_data,
+              delimiter=' ', 
+              fmt='%s ' + "%.3E " * (len(save_data[0, :]) - 1), 
+              header=header, 
+              comments=''
+            )
+        else:
+            np.savetxt(
+              'Errors_' + network_names[n] + '_' + population + 
+              '_SNR' + str(detect_SNR[1]) + '.txt',
+              save_data, 
+              delimiter=' ', 
+              fmt='%s ' + "%.3E " * (len(save_data[0, :]) - 1), 
+              header=header, 
+              comments=''
+            )
+```
+
+
+The first point to make is that this function is not _wrong_: it produces
+correct results.
+It was not written from scratch as described before: it shows the signs of a simple
+function being gradually extended to "work above its pay grade", which 
+made it quite complex.
+
+### Too many purposes
+
+The first thing that jumps to the eye is that this function is doing two "big" things
+at once: calculations (combining Fisher matrices etc.) and I/O (writing out to a file).
+Combining them may seem natural in a first formulation, since once we have computed 
+these values we want to save them somewhere, but this poses several issues:
+
+- if a user wishes to use the computed errors, they have no way to access them directly,
+  and if they do not modify the source code they must save to a file and then read
+  from that file;
+- specifically in this case, loss of information: the values are being saved 
+  in scientific notation with three decimals in the mantissa, which means all information
+  beyond these digits is lost;
+- tests are really difficult to write for such a function.
+
+A simple solution to this is to split the function in two: one for the computation,
+one for the output.
+But even then, 
+
+### Type hinting
+
+### Automatic formatting
 
 # Bibliography
