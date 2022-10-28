@@ -328,6 +328,9 @@ and
 [here](https://gwfish.readthedocs.io/en/latest/tutorials/tutorial_randomization.html);
 it is basic in the sense that it assumes no prior knowledge of the software itself,
 but it does assume familiarity with the task of Fisher matrix forecasting.
+The tutorial provides ready-to-run code, without gaps for the 
+user to fill in. Running new software is hard enough without the worry of having
+
 
 The tutorial provides runnable scripts and their expected output, with 
 an explanation of what that output means. It is computationally cheap, since
@@ -867,11 +870,24 @@ def analyzeFisherErrors(network, parameter_values, fisher_parameters, population
 ```
 
 
-The first point to make is that this function is not _wrong_: it produces
-correct results.
-It was not written from scratch as described before: it shows the signs of a simple
+This function was not written from scratch like this: it shows the signs of a simple
 function being gradually extended to "work above its pay grade", which 
 made it quite complex.
+It features some duplication, which is a violation of the so-called 
+"DRY principle" (Don't Repeat Yourself).
+It has many switches and several layers of loops.
+
+The next sections will discuss how these "issues" can be addressed, but 
+one thing needs to be made explicit: if this was one-off code, it would be
+perfectly fine as-is.
+The necessity to refactor it came from actual user needs --- specifically, 
+a user required `hdf5` output for the errors, which would not be easily achievable
+with the function as written here.
+Writing the function in a "messy" way and _then_ refactoring it if needed is a good process:
+the messy code is often easier to write quickly, it does not require us to think about
+which abstractions we should use and how each of the modular components 
+we make maybe used in other contexts.
+Premature abstraction can create technical debt just like forests of for loops can.
 
 ### Too many purposes
 
@@ -886,14 +902,201 @@ these values we want to save them somewhere, but this poses several issues:
 - specifically in this case, loss of information: the values are being saved 
   in scientific notation with three decimals in the mantissa, which means all information
   beyond these digits is lost;
-- tests are really difficult to write for such a function.
+- tests are really difficult to write for such a function: for one, it has _side effects_,
+  meaning that when it is run it saves things to disk somewhere.
 
 A simple solution to this is to split the function in two: one for the computation,
 one for the output.
-But even then, 
+
+We can do better: several sub-tasks in this function can be modularized, 
+with the guiding principle of having each function perform a single conceptual task.
+
 
 ### Type hinting
 
+This function's call signature is a good example of how type hints 
+can be useful. Without reading the function code, how could we be able to tell 
+that, for example, `population` should be a string while `network` should be
+an object of type `Newtork`?
+
+Documenting the function could be a solution, but is not the best one for this purpose.
+Despite our best efforts, it is not guaranteed to remain up-to-date;
+also, we may get it wrong, and there is no way to automatically check it.
+
+In this context, since we are writing the code of a relatively large module,
+it makes sense to use type hinting: python is dynamically typed, so it 
+allows us to not say anything about the types of the variables we are using,
+but we do have functionality to specify which types we expect.
+
+The syntax to do it in this case is as follows:
+
+```python
+def analyzeFisherErrors(
+    network: det.Network, 
+    parameter_values: pd.DataFrame, 
+    fisher_parameters: list[str], 
+    population: str, 
+    networks_ids: list[list[int]]
+) -> None:
+```
+
+Python by itself will completely ignore these (as long as they can be evaluated without
+raising an error), which means they are only as good 
+as documentation written in a comment; however, there are ways in which they
+can be better.
+For one, they are returned when calling `help(analyzeFisherErrors)` in a console.
+That is, however, also true for the docstring of the function.
+
+The real power of type annotations in `python` is that they can be formally checked 
+by a tool, called a _static type checker_, 
+which will raise an error if, for example, a function is called with the wrong types,
+or if it uses its arguments in a way that is not compatible with their stated types.
+There are several of these available, but here we will focus on `mypy`.
+
+This is a very useful tool to make spotting errors easier in a big codebase;
+since it is only used on the module code, it allows us to have clarity on the 
+types within our module while retaining the flexibility of dynamic types
+when we use our code in an interactive console or a script.
+
+After installing `mypy` (`pip install mypy`), we may use it from the command line
+with the command 
+
+```bash
+mypy fishermatrix.py
+```
+
+where `fishermatrix.py` is the name of the module file containing the `analyzeFisherErrors`
+function.
+By itself this will raise several errors, of the sort
+
+```
+auxiliary.py:1: error: Skipping analyzing "scipy": module is installed, but missing library stubs or py.typed marker
+```
+
+for many packages beyond `scipy`. This reflects the fact that these imported packages are 
+not adopting type hints themselves, which means calls to them cannot be checked.
+This reflects the fact that type hinting is a relatively recent addition to the 
+`python` ecosystem, and many large libraries have not adopted it.
+
+This does not prevent us from using `mypy` in our own code, however, it might 
+just limit its usefulness; in order to get rid of the error we can run `mypy` 
+with the option `--ignore-missing-imports`.
+With it, we get 
+```bash
+$ mypy fishermatrix.py --ignore-missing-imports 
+Success: no issues found in 1 source file
+```
+
+This is good! Note that the file also contains other, non-type-hinted functions,
+which does not create any issue.
+We could enforce typing on _every_ function with the option `--strict`.
+
+We can make sure that `mypy` is indeed checking the body of the function
+by making the signature wrong in some way: for example, if we change the 
+hint on the `network_ids` argument to `networks_ids: int` (as opposed to 
+`networks_ids: list[list[int]]`) we get the error
+
+```python
+$ mypy fishermatrix.py --ignore-missing-imports 
+fishermatrix.py:52: error: Argument 1 to "len" has incompatible type "int"; expected "Sized"
+fishermatrix.py:59: error: Value of type "int" is not indexable
+fishermatrix.py:66: error: Value of type "int" is not indexable
+fishermatrix.py:74: error: Value of type "int" is not indexable
+Found 4 errors in 1 file (checked 1 source file)
+```
+
 ### Automatic formatting
+
+Git commits often get polluted with meaningless whitespace changes, 
+newlines added somewhere, and so on.
+This takes away from our ability to understand what was actually changed. 
+Also, if different parts of the code are written by different people,
+the style will look inconsistent. 
+
+This is a somewhat minor thing, but having automatic formatting as a part 
+of our development routine ensures consistency and makes all code 
+easier to read.
+There are several choices for this task, and I personally like 
+[`black`](https://github.com/psf/black) (of course, this is something 
+that should be agreed on within a project).
+For `python`, standard style is defined by [PEP8](https://peps.python.org/pep-0008/).
+
+
+After installing it with `pip install black`, we may format any file or folder
+with a command such as:
+
+```bash
+$ black fishermatrix.py 
+reformatted fishermatrix.py
+
+All done! 
+1 file reformatted.
+```
+
+This is the output of the first run, while subsequent ones will show a message such as
+
+```bash
+All done!
+1 file left unchanged.
+```
+
+
+### Linting and PEP8
+
+We can also use automated analysis tools to check our code for style and
+compliance to best practices: this is called _linting_.
+
+When running `pylint`, a common linter, on this function, we get a few warnings,
+shortened here for brevity:
+
+```bash
+$ pylint fishermatrix.py 
+************* Module fishermatrix
+fishermatrix.py:38:0: C0301: Line too long (114/100) (line-too-long)
+fishermatrix.py:12:0: C0116: Missing function or method docstring (missing-function-docstring)
+fishermatrix.py:15:4: C0103: Variable name "dm" doesn't conform to snake_case naming style (invalid-name)
+fishermatrix.py:27:0: C0103: Function name "analyzeFisherErrors" doesn't conform to snake_case naming style (invalid-name)
+fishermatrix.py:27:0: R0914: Too many local variables (29/15) (too-many-locals)
+fishermatrix.py:27:0: R0912: Too many branches (15/12) (too-many-branches)
+``` 
+
+Some of these are rather generic warnings, which can be disabled or changed;
+however, 
+
+but which in this case do point to the issue we discussed earlier: this function
+has too many tasks, and this naturally shows up in its number of local variables,
+branches (e.g. `if`s and `for`s).
+
+### Git hooks
+
+Things such as automatic formatting, linting, and even static type checking, 
+are very useful if applied consistently. However, we are fallible and may forget to do so; 
+also, typing `black <name.py>` often gets annoying. 
+
+There is a nice way, however, to ensure that badly-formatted code does not 
+have the chance to get into our version tracking: 
+[git hooks](https://git-scm.com/book/en/v2/Customizing-Git-Git-Hooks).
+
+Using them is not very difficult: we just need to create a file called
+`pre-commit` in the folder `.git/hooks/`. 
+Its content, as a bash script, will be executed every time we make a commit;
+if it returns a non-zero code (which, for example, `black` will do if 
+it needed to modify the files it found) it will abort the commit. 
+However, it will have modified the relevant files; re-adding them 
+will allow us to make a commit with only correctly-formatted files.
+
+
+
+## Module organization and packaging
+
+### Poetry and version management
+
+
+### Semantic versioning
+
+
+### Changelogs
+
+
 
 # Bibliography
