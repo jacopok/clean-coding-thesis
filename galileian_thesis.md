@@ -35,18 +35,39 @@ hyperrefoptions:
 
 # Introduction
 
-Scientists notoriously write bad code.
+It is an opinion held by many that "scientists write bad code"; as evidence for this claim
+I will provide the large number of positive votes on [this academia StackExchange post 
+titled "Why do many talented scientists write horrible software?"](https://web.archive.org/web/20220810064956/http://academia.stackexchange.com:80/questions/17781/why-do-many-talented-scientists-write-horrible-software).
+
 This is a thorny statement, and it should be qualified: code may be "bad" 
-according to the standards of companies, but if its purpose is the investigation 
-of some scientific 
+according to the standards of software companies, but it may serve the purpose it is written
+to accomplish perfectly well, especially if this purpose is to act as a proof 
+of concept, or as an exploratory step.
+However, the _industry best practices_ that are missing from scientific code
+do have a reason to exist, and that reason often becomes apparent when projects
+become large enough, and/or used by enough people.
+Ignorig some of them is OK, and perhaps even advisable, for small projects, 
+but for larger ones they start to matter more and more, and code not using 
+them starts to accumulate _technical debt_, becoming difficult to read, maintain,
+modify, extend.
 
-Using `GWFish` [@harmsGWFishSimulationSoftware2022] to demostrate 
-these software practices is something of a perfect storm. 
-It is a very young piece of software (its development started in early 2021)
+Resources on these best practices are plentiful, but are often focused on 
+giving "industry" examples, which may not be too relevant to the scientific setting.
+Speaking from experience, when making an attempt to implement them in my own
+code, it was always a mental strain to "map" them to the kinds of issues I was 
+interested in.
+
+This work is an attempt to ease this process for others, providing some examples
+of the practical application of these concepts in a practical, scientific context.
+
+Using `GWFish` [@harmsGWFishSimulationSoftware2022] to this end 
+is something of a perfect storm.
+It is a young piece of software (its development started in earnest in early 2021,
+although the ideas it implements are quite a bit older)
 which serves a conceptually simple purpose, and which 
-can be useful to a large amount of people.
+has started to be useful to a large amount of people.
 
-## GWFish in short
+## `GWFish` in short
 
 What follows is a short explanation of what this piece of software does, 
 aimed at non-physicists. I will first introduce the concept of gravitational 
