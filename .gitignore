@@ -1,4 +1,9 @@
 **/__pycache__/*
 **/.hypothesis/*
 best_coding_practices_index.pdf
+galileian_thesis_pandoc_only.pdf
 galileian_thesis.pdf
+frontespizio/*
+!frontespizio.pdf
+!frontespizio.tex
+!frontespizio/Figures/*
