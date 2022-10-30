@@ -1,0 +1,66 @@
+% !TeX spellcheck = IT_IT, EN_US
+% !TEX TS-program = lualatex
+
+\documentclass[a4paper,titlepage]{article}
+
+% \usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english,italian]{babel}
+\usepackage[
+	a4paper,
+	top=12.5mm,
+	bottom=25mm,
+	left=20mm,
+	right=20mm,
+	heightrounded,
+	%	showframe
+	]{geometry}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage{tikz}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage[export]{adjustbox}
+% \usepackage{fontspec}
+
+\definecolor{PaduanRed}{RGB}{155,0,20}
+\setlength{\parindent}{0pt}
+
+%\raggedbottom
+
+\begin{document}
+
+	\begin{titlepage}
+		\selectlanguage{italian}
+		\includegraphics[height=30mm,valign=m]{Figures/logoGalileiana}\hfill\includegraphics[height=20mm,valign=m]{Figures/logo800}
+		\vskip5mm
+		\begin{tikzpicture}[remember picture, overlay]
+			\draw[PaduanRed,line width=0.25pt] (current page.north west) ++(0,-45mm) -- ++(191mm,0);
+		\end{tikzpicture}
+		\vskip-1mm
+		{\fontsize{8.5pt}{8.5pt}\selectfont \textcolor{PaduanRed}{SCUOLA GALILEIANA DI STUDI SUPERIORI}}
+		\vskip26mm
+		\begin{center}
+		{\fontsize{17pt}{17pt}\selectfont \textbf{Università degli Studi di Padova}}
+		\vskip4mm
+		{\fontsize{17pt}{17pt}\selectfont Scuola Galileiana di Studi Superiori}
+		\vskip18mm
+		{\fontsize{15pt}{15pt}\selectfont \textit{Classe di Scienze Naturali}}
+		\vskip20mm
+		{\fontsize{13pt}{13pt}\selectfont Tesi di Diploma Galileiano}
+		\vskip40mm
+		\selectlanguage{english}
+		{\fontsize{22pt}{22pt}\selectfont \textbf{Best practices in scientific coding: a case study}}
+		\selectlanguage{italian}
+		\end{center}
+		\vfill
+		\fontsize{12pt}{12pt}\selectfont
+		\begin{tabularx}{\textwidth}{@{\hskip0mm}Xr@{}}
+			{\fontsize{10pt}{10pt}\selectfont Relatore} & {\fontsize{10pt}{10pt}\selectfont Diplomando} \\[2mm]
+			Prof.\ Luca Heltai & Jacopo Tissino \\
+		\end{tabularx}
+		\vskip6mm
+	\end{titlepage}
+
+\end{document}
