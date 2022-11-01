@@ -1,5 +1,5 @@
 import pytest
-from fishermatrix import analyzeFisherErrors
+from fishermatrix import compute_fisher_errors, output_to_file
 import fishermatrix
 import waveforms
 import detection
@@ -56,13 +56,15 @@ def test_fisher_analysis_output(mocker):
 
     mocker.patch("numpy.savetxt")
 
-    analyzeFisherErrors(
+    errors_dict = compute_fisher_errors(
         network=network,
         parameter_values=parameter_values,
         fisher_parameters=fisher_parameters,
         population="test",
-        networks_ids=[[0]],
+        network_ids=[0],
     )
+    
+    output_to_file(parameter_values, errors_dict, fisher_parameters)
 
     header = (
         "network_SNR mass_1 mass_2 redshift luminosity_distance "
