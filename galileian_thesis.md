@@ -23,6 +23,34 @@ abstract: |
   data analysis.
 header-includes: |
   \usepackage{siunitx}
+  \usepackage{listings}
+  \definecolor{codegreen}{rgb}{0,0.6,0}
+  \definecolor{codegray}{rgb}{0.5,0.5,0.5}
+  \definecolor{codepurple}{rgb}{0.58,0,0.82}
+  \definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+  \lstdefinestyle{mystyle}{
+      backgroundcolor=\color{backcolour},
+      commentstyle=\color{codegreen},
+      keywordstyle=\color{magenta},
+      numberstyle=\tiny\color{codegray},
+      stringstyle=\color{codepurple},
+      basicstyle=\ttfamily\footnotesize,
+      breakatwhitespace=false,
+      breaklines=true,
+      captionpos=b,
+      keepspaces=true,
+      %numbers=left,    % I recommend disabling this, as one can use .numberLines in markdown
+      numbersep=5pt,
+      showspaces=false,
+      showstringspaces=false,
+      showtabs=false,
+      tabsize=2
+  }
+
+  \lstset{style=mystyle}
+
+
 toc: true
 toc-title: Table of contents
 
@@ -59,13 +87,14 @@ interested in.
 
 This work is an attempt to ease this process for others, providing some examples
 of the practical application of these concepts in a practical, scientific context.
-
 Using `GWFish` [@harmsGWFishSimulationSoftware2022] to this end 
 is something of a perfect storm.
 It is a young piece of software (its development started in earnest in early 2021,
 although the ideas it implements are quite a bit older)
 which serves a conceptually simple purpose, and which 
 has started to be useful to a large amount of people.
+
+While the paper 
 
 ## `GWFish` in short
 
@@ -116,14 +145,11 @@ The answers necessarily depend on two aspects:
 
 
 `GWFish` is a piece of software built for the purpose of giving an approximate
-answer to the _first_ of these questions. The second is much harder to deal with
-even for the sources we have direct knowledge of (black holes, neutron stars, white 
-dwarfs), bordering on impossible for more exotic and hypothetical sources 
-
-- Matched filtering
-- Meaning of SNR
-- Fisher matrix error estimation
-- 
+answer to the first of these questions, while it relies on other tools to answer the second.
+Typically, the workflow consists in the generation of a theoretical _population_ of, for example,
+binaries of black holes, which will contain several thousands of them, listing for each
+their masses, distances, spin and so on. This will then be fed into a tool like `GWFish` to 
+get detection statistics.
 
 ### Matched filtering
 
@@ -274,6 +300,34 @@ This is surely not ultimately correct (for example, a flat prior on angular vari
 is not flat on the sphere), but the Fisher matrix approximation is ultimately
 quite rough itself, therefore including non-flat priors is likely not the primary concern. 
 
+# Versioning
+
+The first step towards successfully managing a software project is _version control_:
+having a system to track changes to the code made by many people.
+
+The most popular system for this purpose is by far and away [`git`](https://git-scm.com/), 
+which was developed [by Linus Torvalds in 2005](https://github.com/git/git/commit/e83c5163316f89bfbde7d9ab23ca2e25604af290).
+It is a powerful and fast distributed version control system.
+
+Typically, `git` is used in conjunction with a hosting server in which to store 
+the software project: common choices include [`github`](https://github.com/), 
+[`gitlab`](https://about.gitlab.com/), [`bitbucket`](https://bitbucket.org/product/).
+`GWFish` is hosted on `github`, at the url [github.com/janosch314/GWFish](https://github.com/janosch314/GWFish).
+
+### Semantic versioning
+
+[Semantic versioning](https://semver.org/).
+
+## Changelogs
+
+[Keep a changelog](https://keepachangelog.com/en/1.0.0/).
+
+## Poetry and dependency management
+
+A common source of issues in software development lies in dependency management.
+Ideally, we would like the user to be able to install our package without having to worry 
+about its dependencies, with everything being handled automatically. 
+
 # Documentation
 
 A crucial aspect in software usability is the presence of good documentation.
@@ -287,7 +341,7 @@ As Clean Code [@martinCleanCodeHandbook2008] puts it, line comments are a
 
 Sometimes, a simple-looking piece of code has a counterintuitive element,
 which may be clarified by a quick line comment; however, in most of their typical
-uses 
+uses, line comments could be substituted by clearer code.
 
 ## The diátaxis framework
 
@@ -755,6 +809,11 @@ This may seem pointless, but it is getting to a problem which really does occur
 in these computations: the Fisher matrix $\mathcal{F}$ is indeed often 
 singular or nearly-singular, and it is important for our code to correctly deal with this.
 
+
+### Testing against different versions with `tox`
+
+
+
 # Code structure
 
 Well-structured code is a hard target to reach, 
@@ -992,7 +1051,8 @@ function.
 By itself this will raise several errors, of the sort
 
 ```
-auxiliary.py:1: error: Skipping analyzing "scipy": module is installed, but missing library stubs or py.typed marker
+auxiliary.py:1: error: Skipping analyzing "scipy": module is installed, 
+  but missing library stubs or py.typed marker
 ```
 
 for many packages beyond `scipy`. This reflects the fact that these imported packages are 
@@ -1107,6 +1167,47 @@ it needed to modify the files it found) it will abort the commit.
 However, it will have modified the relevant files; re-adding them 
 will allow us to make a commit with only correctly-formatted files.
 
+### Premature optimizations
+
+This code is often using the syntax `for i in np.arange(N)` in order to loop 
+over `N` numbers, as opposed to the native python `for i in range(N)`.
+The logic behind it was to improve performance: generally speaking, `numpy` 
+is indeed faster than native `python` for vector and matrix operations. 
+
+However, using it in this context is a case of premature optimization.
+Benchmarking the whole function for this example is overkill, so let us use a simpler
+example: suppose we want to compute (but not store) the sums of the first 1000 numbers.
+The native-python solution is 
+
+```python
+for x in range(1000): 
+    x+x
+```
+
+and it takes about \qty{20}{\micro\second} on my machine (measured with the `ipython` magic `%timeit`).
+The alternative,
+
+```python
+for x in np.arange(1000): 
+    x+x
+```
+
+takes roughly double that: \qty{43}{\micro\second}. 
+The way to really get a speed improvement in this context would be to ditch the `for` loop completely, 
+and directly work with `numpy` vectors:
+
+```python
+x_vec = np.arange(1000): 
+x_vec + x_vec
+```
+
+which takes roughly \qty{1.4}{\micro\second}.
+
+Really, though, the loops within `analyzeFisherErrors` are not the bottleneck in its evaluation,
+and I would argue that in this case readability matters more than speed. 
+Even if `np.arange` was slightly faster than `range`, it would still be worth it to use the simpler 
+native syntax in order to have less visual clutter. 
+
 ### Test-aided refactoring and mocking
 
 When refactoring, an important part of the job is to ensure that we are not breaking 
@@ -1190,15 +1291,17 @@ Speficially, this code leads to a file named `Errors_ET_test_SNR8.0.txt` being c
 with the content:
 
 ```
-network_SNR mass_1 mass_2 redshift luminosity_distance theta_jn ra dec psi phase geocent_time 
-err_mass_1 err_mass_2 err_redshift err_luminosity_distance err_theta_jn err_ra err_dec err_psi 
-err_phase err_geocent_time err_sky_location
-1.000000000000000000e+02 1.399999999999999911e+00 1.399999999999999911e+00 1.000000000000000021e-02 
-4.000000000000000000e+01 2.617993877991494411e+00 3.450000000000000178e+00 -4.099999999999999756e-01 
-1.600000000000000089e+00 0.000000000000000000e+00 1.187008882000000000e+09 1.017914276710398976e-07 
-1.017914276891040002e-07 8.968834495081142986e-08 2.322041335493289615e+00 1.042138472375718772e-01 
-3.126956775654952340e-03 2.694129538261750244e-03 2.042402229769859634e-01 4.093490006421656169e-01 
-5.639112123104607181e-05 2.422853256632673784e-05
+network_SNR mass_1 mass_2 redshift luminosity_distance theta_jn ra dec psi phase 
+geocent_time err_mass_1 err_mass_2 err_redshift err_luminosity_distance err_theta_jn 
+err_ra err_dec err_psi err_phase err_geocent_time err_sky_location
+1.000000000000000000e+02 1.399999999999999911e+00 1.399999999999999911e+00 
+1.000000000000000021e-02 4.000000000000000000e+01 2.617993877991494411e+00 
+3.450000000000000178e+00 -4.099999999999999756e-01 1.600000000000000089e+00 
+0.000000000000000000e+00 1.187008882000000000e+09 1.017914276710398976e-07 
+1.017914276891040002e-07 8.968834495081142986e-08 2.322041335493289615e+00 
+1.042138472375718772e-01 3.126956775654952340e-03 2.694129538261750244e-03 
+2.042402229769859634e-01 4.093490006421656169e-01 5.639112123104607181e-05 
+2.422853256632673784e-05
 ```
 
 An option would be to read the file as a part of the test and then delete it, 
@@ -1324,16 +1427,9 @@ def test_fisher_analysis_output(mocker):
     }
 ```
 
-## Module organization and packaging
-
-### Poetry and version management
-
-
-### Semantic versioning
-
-
-### Changelogs
-
-
+- removed loop in detector_ids, better handled outside this function
+- np.arange to range
+- `npar>0` check is not required: if `npar<=0` the function is useless
+- 
 
 # Bibliography
