@@ -898,7 +898,7 @@ $$ A = \left[\begin{array}{cc}
 $$
 
 a singular matrix, with no multiplicative inverse.
-Interestingly, our algorithm does give a "result", 
+Our algorithm does give a result: 
 
 $$ A^{-1} \overset{?}{=} \left[\begin{array}{cc}
 0.25 & 0.25 \\ 
@@ -906,10 +906,73 @@ $$ A^{-1} \overset{?}{=} \left[\begin{array}{cc}
 \end{array}\right].
 $$
 
-This may seem pointless, but it is getting to a problem which really does occur 
+This is getting to a problem which really does occur 
 in these computations: the Fisher matrix $\mathcal{F}$ is indeed often 
 singular or nearly-singular, and it is important for our code to correctly deal with this.
 
+The quantity this code is computing is really the _Moore-Penrose pseudoinverse_,
+which is only the correct inverse in the subspace defined by the span of the matrix
+(to numerical precision, that is, with very small eigenvalues being approximated as zero).
+Formally, instead of $A A^{-1} = A^{-1} A = 1$, this pseudoinverse $A^+$ must satisfy
+$A^+ A A^+ = A^+$ and $A A^+ A = A$.
+
+Further, we really should test this only the kinds of inputs we expect to be possible.
+Doing this in this case turned out to be tricky but possible with `hypothesis`.
+
+Gravitational-wave Fisher matrices can always be written as $M_{ij} = \vec{v}_i \cdot \vec{v}_j$
+for vectors $\vec{v}$ lying in some high-dimensional vector space (specifically, the
+vector space is the Hilbert space of waveforms with the product $(\cdot | \cdot)$, and the 
+vectors are the derivatives $\vec{v}_i = \partial _i h$).
+
+Therefore, the following test generates arbitrary $N$-dimensional vectors $v_i$ and cosines $c_{ij}$,
+and then generates matrices as $M_{ij} = v_i v_j c_{ij}$.
+The conditions $c_{ii} = 1$ and $c_{ij} = c_{ji}$, which will always hold for
+angles amongst vectors, are enforced _a posteriori_.
+
+```python
+from gwfish_matrix_inverse import invertSVD
+import numpy as np
+from hypothesis import given, reject, target, seed
+from hypothesis import strategies as st
+from hypothesis.extra.numpy import arrays
+import pytest
+
+MATRIX_DIMENSION=4
+
+
+@seed(1)
+@given(
+    vector_norms=arrays(
+        np.float64, 
+        (MATRIX_DIMENSION,), 
+        elements=st.floats(
+            min_value=1e-5,
+            max_value=1e5,
+        ),
+        unique=True,
+    ),
+    cosines=arrays(
+        np.float64, 
+        (MATRIX_DIMENSION,MATRIX_DIMENSION), 
+        elements=st.floats(
+            min_value=-1.0, 
+            max_value=1.0,
+        ),
+        unique=True,
+    ),
+)
+def test_matrix_inversion_hypothesis(vector_norms, cosines):
+    
+    cosines[np.arange(N), np.arange(N)] = 1
+    cosines = np.maximum(cosines, cosines.T)
+    
+    matrix = np.outer(vector_norms, vector_norms) * cosines
+    
+    inverse = invertSVD(matrix)
+
+    assert np.allclose(inverse@matrix@inverse, inverse, atol=1e-1, rtol=1e-2)
+    assert np.allclose(matrix@inverse@matrix, matrix, atol=1e-1, rtol=1e-2)
+```
 
 ## Testing against different versions with `tox`
 
@@ -1531,6 +1594,9 @@ def test_fisher_analysis_output(mocker):
 - removed loop in detector_ids, better handled outside this function
 - np.arange to range
 - `npar>0` check is not required: if `npar<=0` the function is useless
-- 
+- lookup of `network.detectors[d]` was happening multiple times -> unified
+- redefinition of networkSNR is bad and error-prone
+
+# Conclusions
 
 # Bibliography
