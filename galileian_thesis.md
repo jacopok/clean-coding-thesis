@@ -51,6 +51,7 @@ header-includes: |
   \lstset{style=mystyle}
 
 
+
 toc: true
 toc-title: Table of contents
 
@@ -60,28 +61,27 @@ hyperrefoptions:
 
 ---
 
-
 # Introduction
 
 It is an opinion held by many that "scientists write bad code"; as evidence for this claim
 I will provide the large number of positive votes on [this academia StackExchange post 
 titled "Why do many talented scientists write horrible software?"](https://web.archive.org/web/20220810064956/http://academia.stackexchange.com:80/questions/17781/why-do-many-talented-scientists-write-horrible-software).
 
-This is a thorny statement, and it should be qualified: code may be "bad" 
+This is, however, a thorny statement which should be qualified: code may be "bad" 
 according to the standards of software companies, but it may serve the purpose it is written
 to accomplish perfectly well, especially if this purpose is to act as a proof 
 of concept, or as an exploratory step.
 However, the _industry best practices_ that are missing from scientific code
 do have a reason to exist, and that reason often becomes apparent when projects
 become large enough, and/or used by enough people.
-Ignorig some of them is OK, and perhaps even advisable, for small projects, 
+Ignorig some of them is acceptable, and perhaps even advisable, for small projects, 
 but for larger ones they start to matter more and more, and code not using 
 them starts to accumulate _technical debt_, becoming difficult to read, maintain,
 modify, extend.
 
 Resources on these best practices are plentiful, but are often focused on 
 giving "industry" examples, which may not be too relevant to the scientific setting.
-Speaking from experience, when making an attempt to implement them in my own
+When making an attempt to implement them in my own
 code, it was always a mental strain to "map" them to the kinds of issues I was 
 interested in.
 
@@ -157,7 +157,7 @@ binaries of black holes, which will contain several thousands of them, listing f
 their masses, distances, spin and so on. This will then be fed into a tool like `GWFish` to 
 get detection statistics.
 
-### Matched filtering
+## Matched filtering
 
 This is a basic technique used for all modern gravitational data analysis.
 The idea is that we want to extract a very weak signal which is submerged in noise.
@@ -246,7 +246,7 @@ $$
 
 where $\mathcal{N}$ is an irrelevant normalization. 
 
-### Fisher matrix error estimation
+## Fisher matrix error estimation
 
 Up to now we discussed the analysis of current data; the question `GWFish` seeks to answer, 
 on the other hand, pertains to data taken by detectors we have not built yet.
@@ -1135,7 +1135,9 @@ improving its usability.
 
 `GWFish` is released as a python package, with some additional helper scripts to 
 run it.
-A core point in its functionality, however, is the function `analyzeFisherErrors`.
+A core point in its functionality is the function `analyzeFisherErrors`.
+In order to make the discussion here somewhat constrained, I will limit it 
+to the refactoring of this single function, without modifying anything else.
 
 ## Refactoring `analyzeFisherErrors`
 
@@ -1268,9 +1270,12 @@ def analyzeFisherErrors(network, parameter_values, fisher_parameters, population
 This function was not written from scratch like this: it shows the signs of a simple
 function being gradually extended to "work above its pay grade", which 
 made it quite complex.
-It features some duplication, which is a violation of the so-called 
-"DRY principle" (Don't Repeat Yourself).
 It has many switches and several layers of loops.
+It features some duplication, which is a violation of the so-called 
+"DRY principle" (Don't Repeat Yourself): similar but different parts of the 
+code being activated in different situations are dangerous, since
+it is easy to modify one but not the other, which may make the behaviour 
+of the function change unexpectedly.
 
 The next sections will discuss how these "issues" can be addressed, but 
 one thing needs to be made explicit: if this was one-off code, it would be
@@ -1278,13 +1283,19 @@ perfectly fine as-is.
 The necessity to refactor it came from actual user needs --- specifically, 
 a user required `hdf5` output for the errors, which would not be easily achievable
 with the function as written here.
-Writing the function in a "messy" way and _then_ refactoring it if needed is a good process:
+As opposed to adding another `if` clause, we can refactor the logic
+and make it more modular.
+
+Writing the function in a "messy" way and _then_ refactoring it _if needed_ is a good process:
 the messy code is often easier to write quickly, it does not require us to think about
 which abstractions we should use and how each of the modular components 
 we make maybe used in other contexts.
 Premature abstraction can create technical debt just like forests of for loops can.
+So, this section should not be interpreted as "fixing bad code", but as 
+a natural part of the development process: starting with the easiest-to-write
+code that will get the job done, and then refining it.
 
-### Too many purposes
+## Too many purposes
 
 The first thing that jumps to the eye is that this function is doing two "big" things
 at once: calculations (combining Fisher matrices etc.) and I/O (writing out to a file).
@@ -1307,7 +1318,7 @@ We can do better: several sub-tasks in this function can be modularized,
 with the guiding principle of having each function perform a single conceptual task.
 
 
-### Type hinting
+## Type hinting
 
 This function's call signature is a good example of how type hints 
 can be useful. Without reading the function code, how could we be able to tell 
@@ -1401,7 +1412,7 @@ fishermatrix.py:74: error: Value of type "int" is not indexable
 Found 4 errors in 1 file (checked 1 source file)
 ```
 
-### Automatic formatting
+## Automatic formatting
 
 Git commits often get polluted with meaningless whitespace changes, 
 newlines added somewhere, and so on.
@@ -1436,8 +1447,7 @@ All done!
 1 file left unchanged.
 ```
 
-
-### Linting and PEP8
+## Linting and PEP8
 
 We can also use automated analysis tools to check our code for style and
 compliance to best practices: this is called _linting_.
@@ -1463,7 +1473,7 @@ but which in this case do point to the issue we discussed earlier: this function
 has too many tasks, and this naturally shows up in its number of local variables,
 branches (e.g. `if`s and `for`s).
 
-### Git hooks
+## Git hooks
 
 Things such as automatic formatting, linting, and even static type checking, 
 are very useful if applied consistently. However, we are fallible and may forget to do so; 
@@ -1481,7 +1491,7 @@ it needed to modify the files it found) it will abort the commit.
 However, it will have modified the relevant files; re-adding them 
 will allow us to make a commit with only correctly-formatted files.
 
-### Premature optimizations
+## Premature optimizations
 
 This code is often using the syntax `for i in np.arange(N)` in order to loop 
 over `N` numbers, as opposed to the native python `for i in range(N)`.
@@ -1522,7 +1532,7 @@ and I would argue that in this case readability matters more than speed.
 Even if `np.arange` was slightly faster than `range`, it would still be worth it to use the simpler 
 native syntax in order to have less visual clutter. 
 
-### Test-aided refactoring and mocking
+## Test-aided refactoring and mocking
 
 When refactoring, an important part of the job is to ensure that we are not breaking 
 existing functionality. 
@@ -1605,17 +1615,8 @@ Speficially, this code leads to a file named `Errors_ET_test_SNR8.0.txt` being c
 with the content:
 
 ```
-network_SNR mass_1 mass_2 redshift luminosity_distance theta_jn ra dec psi phase 
-geocent_time err_mass_1 err_mass_2 err_redshift err_luminosity_distance err_theta_jn 
-err_ra err_dec err_psi err_phase err_geocent_time err_sky_location
-1.000000000000000000e+02 1.399999999999999911e+00 1.399999999999999911e+00 
-1.000000000000000021e-02 4.000000000000000000e+01 2.617993877991494411e+00 
-3.450000000000000178e+00 -4.099999999999999756e-01 1.600000000000000089e+00 
-0.000000000000000000e+00 1.187008882000000000e+09 1.017914276710398976e-07 
-1.017914276891040002e-07 8.968834495081142986e-08 2.322041335493289615e+00 
-1.042138472375718772e-01 3.126956775654952340e-03 2.694129538261750244e-03 
-2.042402229769859634e-01 4.093490006421656169e-01 5.639112123104607181e-05 
-2.422853256632673784e-05
+network_SNR mass_1 mass_2 redshift luminosity_distance theta_jn ra dec psi phase geocent_time err_mass_1 err_mass_2 err_redshift err_luminosity_distance err_theta_jn err_ra err_dec err_psi err_phase err_geocent_time err_sky_location
+100.0 1.400E+00 1.400E+00 1.000E-02 4.000E+01 2.618E+00 3.450E+00 -4.100E-01 1.600E+00 0.000E+00 1.187E+09 1.018E-07 1.018E-07 8.969E-08 2.322E+00 1.042E-01 3.127E-03 2.694E-03 2.042E-01 4.093E-01 5.639E-05 2.423E-05 
 ```
 
 An option would be to read the file as a part of the test and then delete it, 
@@ -1741,12 +1742,226 @@ def test_fisher_analysis_output(mocker):
     }
 ```
 
-- removed loop in detector_ids, better handled outside this function
-- np.arange to range
-- `npar>0` check is not required: if `npar<=0` the function is useless
-- lookup of `network.detectors[d]` was happening multiple times -> unified
-- redefinition of networkSNR is bad and error-prone
+## `analyzeFisherErrors` refactored
+
+Once the code to check the function was not broken was in place
+(with some more tests, not shown here for brevity), the 
+function was refactored as follows:
+
+```python
+def sky_localization_area(,
+`
+    network_fisher_inverse: np.ndarray,
+    declination_angle: np.ndarray,
+    right_ascension_index: int,
+    declination_index: int,
+) -> float:
+    """
+    Compute the 1-sigma sky localization ellipse area starting
+    from the full network Fisher matrix inverse and the inclination.
+    """
+    return (
+        np.pi
+        * np.abs(np.cos(declination_angle))
+        * np.sqrt(
+            network_fisher_inverse[right_ascension_index, right_ascension_index]
+            * network_fisher_inverse[declination_index, declination_index]
+            - network_fisher_inverse[right_ascension_index, declination_index] ** 2
+        )
+    )
+
+
+def compute_fisher_errors(
+    network: det.Network,
+    parameter_values: pd.DataFrame,
+    fisher_parameters: list[str],
+    sub_network_ids: list[int],
+) -> tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
+    """
+    Compute Fisher matrix errors for a network whose
+    SNR and Fisher matrices have already been calculated.
+
+    Will only return output for the signals n_above_thr
+    for which the network SNR is above network.detection_SNR[1].
+
+    Returns:
+    network_snr: array with shape (n_above_thr,)
+        Network SNR for the detected signals.
+    parameter_errors: array with shape (n_above_thr, n_parameters)
+        One-sigma Fisher errors for the parameters.
+    sky_localization: array with shape (n_above_thr,) or None
+        One-sigma sky localization area in steradians,
+        returned if the signals have both right ascension and declination,
+        None otherwise.
+    """
+
+    n_params = len(fisher_parameters)
+    n_signals = len(parameter_values)
+
+    assert n_params > 0
+    assert n_signals > 0
+
+    signals_havesky = False
+    if ("ra" in fisher_parameters) and ("dec" in fisher_parameters):
+        signals_havesky = True
+        i_ra = fisher_parameters.index("ra")
+        i_dec = fisher_parameters.index("dec")
+
+    detector_snr_thr, network_snr_thr = network.detection_SNR
+
+    parameter_errors = np.zeros((n_signals, n_params))
+    if signals_havesky:
+        sky_localization = np.zeros((n_signals,))
+    network_snr = np.zeros((n_signals,))
+
+    detectors = [network.detectors[d] for d in sub_network_ids]
+
+    network_snr = np.sqrt(sum((detector.SNR**2 for detector in detectors)))
+
+    for k in range(n_signals):
+        network_fisher_matrix = np.zeros((n_params, n_params))
+
+        for detector in detectors:
+            if detector.SNR[k] > detector_snr_thr:
+                network_fisher_matrix += detector.fisher_matrix[k, :, :]
+
+        network_fisher_inverse = invertSVD(network_fisher_matrix)
+        parameter_errors[k, :] = np.sqrt(np.diagonal(network_fisher_inverse))
+
+        if signals_havesky:
+            sky_localization[k] = sky_localization_area(,
+            `
+                network_fisher_inverse, parameter_values["dec"].iloc[k], i_ra, i_dec
+            )
+
+    detected = np.where(network_snr > network_snr_thr)[0]
+
+    if signals_havesky:
+        return (
+            network_snr[detected],
+            parameter_errors[detected, :],
+            sky_localization[detected],
+        )
+
+    return network_snr[detected], parameter_errors[detected, :], None
+
+
+def output_to_txt_file(
+    parameter_values: pd.DataFrame,
+    network_snr: np.ndarray,
+    parameter_errors: np.ndarray,
+    sky_localization: Optional[np.ndarray],
+    fisher_parameters: list[str],
+    filename: str,
+) -> None:
+
+    delim = " "
+    header = (
+        "network_SNR "
+        + delim.join(parameter_values.keys())
+        + " "
+        + delim.join(["err_" + x for x in fisher_parameters])
+    )
+    save_data = np.c_[network_snr, parameter_values, parameter_errors]
+    if sky_localization is not None:
+        header += " err_sky_location"
+        save_data = np.c_[save_data, sky_localization]
+
+    row_format = "%s " + " ".join(["%.3E" for _ in range(save_data.shape[1] - 1)])
+
+    np.savetxt(
+        filename + ".txt",
+        save_data,
+        delimiter=" ",
+        header=header,
+        comments="",
+        fmt=row_format,
+    )
+
+
+def errors_file_name(
+    network: det.Network, sub_network_ids: list[int], population_name: str
+) -> str:
+
+    sub_network = "_".join([network.detectors[k].name for k in sub_network_ids])
+
+    return (
+        "Errors_"
+        + sub_network
+        + "_"
+        + population_name
+        + "_SNR"
+        + str(network.detection_SNR[1])
+    )
+
+
+def analyze_and_save_to_txt(
+    network: det.Network,
+    parameter_values: pd.DataFrame,
+    fisher_parameters: list[str],
+    sub_network_ids_list: list[list[int]],
+    population_name: str,
+) -> None:
+
+    for sub_network_ids in sub_network_ids_list:
+
+        network_snr, errors, sky_localization = compute_fisher_errors(
+            network=network,
+            parameter_values=parameter_values,
+            fisher_parameters=fisher_parameters,
+            sub_network_ids=sub_network_ids,
+        )
+
+        filename = errors_file_name(
+            network=network,
+            sub_network_ids=sub_network_ids,
+            population_name=population_name,
+        )
+
+        output_to_txt_file(
+            parameter_values=parameter_values,
+            network_snr=network_snr,
+            parameter_errors=errors,
+            sky_localization=sky_localization,
+            fisher_parameters=fisher_parameters,
+            filename=filename,
+        )
+```
+
+A summary of the changes made is as follows.
+
+- The functionality of `analyzeFisherErrors` was split into five:
+    `compute_fisher_errors`, `sky_localization_area`,
+    `output_to_txt`, `errors_file_name`, `analyze_and_save_to_txt`.
+    These all contain logically distinct sections of the code, which 
+    we may desire to modify independently of each other.
+- The `compute_fisher_errors` function now only considers one 
+    subnetwork, and the looping over subnetworks is relegated to the 
+    higher-level function `analyze_and_save_to_txt`.
+- The check for `npar>0` which nested the whole function by one 
+    layer was changed to an `assert` statement at the beginning of
+    the function --- if the number of parameters is less than zero
+    the whole function call is invalid, and something has gone wrong.
+- A few computations were happening in different places, such as 
+    detector selection (evaluting `network.detectors[d]`) or a check 
+    that the network SNR was greater than a threshold value. 
+    They were unified.
+- The computation of `newtorkSNR` was compactified.
+
+The resulting code is still not perfect, of course. 
+For one, a large number of parameters are being passed through
+by these functions. This makes them coupled, long, complex.
+
+A way to ameliorate this issue will entail modifying more than just 
+`analyzeFisherErrors`. Probably, the most convenient approach will be to 
+restructure the classes in the whole package,
+probably with one representing the whole population analyzed: 
+the functions in the refactored code are all working on the same data
+(a table of paramter values, a list of which parameters to consider
+for the Fisher analysis, a table of Fisher errors etc.).
 
 # Conclusions
+
+
 
 # Bibliography
