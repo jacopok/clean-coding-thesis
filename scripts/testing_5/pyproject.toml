@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "matrix_inverse"
+version = "0.1.0"
+description = ""
+authors = ["jacopo <jacopo.tissino@gssi.it>"]
+packages = [{include = "matrix_inverse"}]
+
+[tool.poetry.dependencies]
+python = ">=3.8, <3.12"
+pytest = "^7.2.0"
+hypothesis = "^6.56.4"
+numpy = "^1.23.4"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
