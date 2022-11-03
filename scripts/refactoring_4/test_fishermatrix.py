@@ -1,15 +1,12 @@
-import pytest
-from fishermatrix import compute_fisher_errors, output_to_file
+from fishermatrix import analyze_and_save_to_txt
 import fishermatrix
 import waveforms
-import detection
-from detection import Network, Detector
+from detection import Network
 import pandas as pd
 import numpy as np
 
 
 def test_fisher_analysis_output(mocker):
-
     params = {
         "mass_1": 1.4,
         "mass_2": 1.4,
@@ -36,15 +33,6 @@ def test_fisher_analysis_output(mocker):
         config="detectors.yaml",
     )
 
-    wave, t_of_f = waveforms.hphc_amplitudes(
-        "gwfish_TaylorF2",
-        parameter_values.iloc[0],
-        network.detectors[0].frequencyvector,
-    )
-    signal = detection.projection(
-        parameter_values.iloc[0], network.detectors[0], wave, t_of_f
-    )
-
     network.detectors[0].fisher_matrix[0, :, :] = fishermatrix.FisherMatrix(
         "gwfish_TaylorF2",
         parameter_values.iloc[0],
@@ -56,15 +44,13 @@ def test_fisher_analysis_output(mocker):
 
     mocker.patch("numpy.savetxt")
 
-    errors_dict = compute_fisher_errors(
+    analyze_and_save_to_txt(
         network=network,
         parameter_values=parameter_values,
         fisher_parameters=fisher_parameters,
-        population="test",
-        network_ids=[0],
+        sub_network_ids_list=[[0]],
+        population_name="test",
     )
-    
-    output_to_file(parameter_values, errors_dict, fisher_parameters)
 
     header = (
         "network_SNR mass_1 mass_2 redshift luminosity_distance "
@@ -105,4 +91,98 @@ def test_fisher_analysis_output(mocker):
         "delimiter": " ",
         "header": header,
         "comments": "",
+        "fmt": (
+            "%s %.3E %.3E %.3E %.3E %.3E %.3E %.3E %.3E %.3E %.3E "
+            "%.3E %.3E %.3E %.3E %.3E %.3E %.3E %.3E %.3E %.3E %.3E"
+        ),
+    }
+
+def test_fisher_analysis_output_nosky(mocker):
+    params = {
+        "mass_1": 1.4,
+        "mass_2": 1.4,
+        "redshift": 0.01,
+        "luminosity_distance": 40,
+        "theta_jn": 5 / 6 * np.pi,
+        "ra": 3.45,
+        "dec": -0.41,
+        "psi": 1.6,
+        "phase": 0,
+        "geocent_time": 1187008882,
+    }
+
+    parameter_values = pd.DataFrame()
+    for key, item in params.items():
+        parameter_values[key] = np.full((1,), item)
+
+    fisher_parameters = list(params.keys())
+    fisher_parameters.remove('dec')
+
+    network = Network(
+        detector_ids=["ET"],
+        parameters=parameter_values,
+        fisher_parameters=fisher_parameters,
+        config="detectors.yaml",
+    )
+
+    network.detectors[0].fisher_matrix[0, :, :] = fishermatrix.FisherMatrix(
+        "gwfish_TaylorF2",
+        parameter_values.iloc[0],
+        fisher_parameters,
+        network.detectors[0],
+    )
+
+    network.detectors[0].SNR[0] = 100
+
+    mocker.patch("numpy.savetxt")
+
+    analyze_and_save_to_txt(
+        network=network,
+        parameter_values=parameter_values,
+        fisher_parameters=fisher_parameters,
+        sub_network_ids_list=[[0]],
+        population_name="test",
+    )
+
+    header = (
+        "network_SNR mass_1 mass_2 redshift luminosity_distance "
+        "theta_jn ra dec psi phase geocent_time err_mass_1 err_mass_2 "
+        "err_redshift err_luminosity_distance err_theta_jn err_ra "
+        "err_psi err_phase err_geocent_time"
+    )
+
+    data = [
+        100.0,
+        1.400E+00,
+        1.400E+00,
+        1.000E-02,
+        4.000E+01,
+        2.618E+00,
+        3.450E+00,
+        -4.100E-01,
+        1.600E+00,
+        0.000E+00,
+        1.187E+09,
+        1.009E-07,
+        1.009E-07,
+        8.648E-08,
+        2.321E+00,
+        1.040E-01,
+        3.121E-03,
+        8.905E-02,
+        1.771E-01,
+        2.251E-05,
+    ]
+
+    assert np.savetxt.call_args.args[0] == "Errors_ET_test_SNR8.0.txt"
+    assert np.allclose(np.savetxt.call_args.args[1], data, rtol=2e-3)
+
+    assert np.savetxt.call_args.kwargs == {
+        "delimiter": " ",
+        "header": header,
+        "comments": "",
+        "fmt": (
+            "%s %.3E %.3E %.3E %.3E %.3E %.3E %.3E %.3E %.3E %.3E "
+            "%.3E %.3E %.3E %.3E %.3E %.3E %.3E %.3E %.3E"
+        ),
     }
