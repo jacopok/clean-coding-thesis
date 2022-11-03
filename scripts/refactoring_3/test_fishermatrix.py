@@ -54,8 +54,6 @@ def test_fisher_analysis_output(mocker):
 
     network.detectors[0].SNR[0] = 100
 
-    mocker.patch("numpy.savetxt")
-
     analyzeFisherErrors(
         network=network,
         parameter_values=parameter_values,
@@ -63,44 +61,3 @@ def test_fisher_analysis_output(mocker):
         population="test",
         networks_ids=[[0]],
     )
-
-    header = (
-        "network_SNR mass_1 mass_2 redshift luminosity_distance "
-        "theta_jn ra dec psi phase geocent_time err_mass_1 err_mass_2 "
-        "err_redshift err_luminosity_distance err_theta_jn err_ra "
-        "err_dec err_psi err_phase err_geocent_time err_sky_location"
-    )
-
-    data = [
-        1.00000000000e02,
-        1.39999999999e00,
-        1.39999999999e00,
-        1.00000000000e-02,
-        4.00000000000e01,
-        2.61799387799e00,
-        3.45000000000e00,
-        -4.09999999999e-01,
-        1.60000000000e00,
-        0.00000000000e00,
-        1.18700888200e09,
-        1.01791427671e-07,
-        1.01791427689e-07,
-        8.96883449508e-08,
-        2.32204133549e00,
-        1.04213847237e-01,
-        3.12695677565e-03,
-        2.69412953826e-03,
-        2.04240222976e-01,
-        4.09349000642e-01,
-        5.63911212310e-05,
-        2.42285325663e-05,
-    ]
-
-    assert np.savetxt.call_args.args[0] == "Errors_ET_test_SNR8.0.txt"
-    assert np.allclose(np.savetxt.call_args.args[1], data)
-
-    assert np.savetxt.call_args.kwargs == {
-        "delimiter": " ",
-        "header": header,
-        "comments": "",
-    }
