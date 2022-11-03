@@ -40,7 +40,7 @@ header-includes: |
       breaklines=true,
       captionpos=b,
       keepspaces=true,
-      %numbers=left,    % I recommend disabling this, as one can use .numberLines in markdown
+      %numbers=left,
       numbersep=5pt,
       showspaces=false,
       showstringspaces=false,
@@ -910,7 +910,8 @@ This is getting to a problem which really does occur
 in these computations: the Fisher matrix $\mathcal{F}$ is indeed often 
 singular or nearly-singular, and it is important for our code to correctly deal with this.
 
-The quantity this code is computing is really the _Moore-Penrose pseudoinverse_,
+The quantity this code is computing is actually not the matrix inverse, 
+but the _Moore-Penrose pseudoinverse_,
 which is only the correct inverse in the subspace defined by the span of the matrix
 (to numerical precision, that is, with very small eigenvalues being approximated as zero).
 Formally, instead of $A A^{-1} = A^{-1} A = 1$, this pseudoinverse $A^+$ must satisfy
@@ -937,46 +938,194 @@ from hypothesis import strategies as st
 from hypothesis.extra.numpy import arrays
 import pytest
 
-MATRIX_DIMENSION=4
+MATRIX_DIMENSION = 4
+ABS_TOLERANCE = 1e-1
+REL_TOLERANCE = 1e-2
+MIN_NORM = 1e-5
+MAX_NORM = 1e5
 
 
 @seed(1)
 @given(
     vector_norms=arrays(
-        np.float64, 
-        (MATRIX_DIMENSION,), 
+        np.float64,
+        (MATRIX_DIMENSION,),
         elements=st.floats(
-            min_value=1e-5,
-            max_value=1e5,
+            min_value=MIN_NORM,
+            max_value=MAX_NORM,
         ),
         unique=True,
     ),
     cosines=arrays(
-        np.float64, 
-        (MATRIX_DIMENSION,MATRIX_DIMENSION), 
+        np.float64,
+        (MATRIX_DIMENSION, MATRIX_DIMENSION),
         elements=st.floats(
-            min_value=-1.0, 
+            min_value=-1.0,
             max_value=1.0,
         ),
         unique=True,
     ),
 )
-def test_matrix_inversion_hypothesis(vector_norms, cosines):
-    
-    cosines[np.arange(N), np.arange(N)] = 1
+def test_matrix_pseudoinverse_hypothesis(vector_norms, cosines):
+
+    cosines[np.arange(MATRIX_DIMENSION), np.arange(MATRIX_DIMENSION)] = 1
     cosines = np.maximum(cosines, cosines.T)
-    
+
     matrix = np.outer(vector_norms, vector_norms) * cosines
-    
+
     inverse = invertSVD(matrix)
 
-    assert np.allclose(inverse@matrix@inverse, inverse, atol=1e-1, rtol=1e-2)
-    assert np.allclose(matrix@inverse@matrix, matrix, atol=1e-1, rtol=1e-2)
+    assert np.allclose(
+        inverse @ matrix @ inverse, inverse, atol=ABS_TOLERANCE, rtol=REL_TOLERANCE
+    )
+    assert np.allclose(
+        matrix @ inverse @ matrix, matrix, atol=ABS_TOLERANCE, rtol=REL_TOLERANCE
+    )
 ```
+
+This is not the be-all-and-end all for this kind of test: for one, 
+the tolerances were hand-picked,[^tolerances] and a better understanding of the 
+mathematical problem is desirable.
+Still, this showcases how powerful this property-based testing framework is.
+
+[^tolerances]: They are set to values which are acceptable for this kind of analysis;
+    the biases resulting from the use of the Fisher matrix approximation can be 
+    way larger than 10%.
 
 ## Testing against different versions with `tox`
 
+Ideally, we would like to not depend on a specific version of our dependencies,
+but instead to support a range of versions.
+Testing every possible combination is unfeasible, since they grow exponentially,
+but we can go to some length by at least checking every version 
+of our "main" dependencies.
+For example, we can check that our sofware is installable
+with every currently supported version of `python`. 
+There is a tool to automate this: [`tox`](https://tox.wiki/en/latest/). 
 
+It allows us to run our tests in a freshly created 
+virtual environment with arbitrary package versions. 
+In order to use it we need to structure our code snippet as a package,
+so we will use `poetry` with a `pyproject.toml` file as follows:
+
+```toml
+[tool.poetry]
+name = "matrix_inverse"
+version = "0.1.0"
+description = ""
+authors = ["jacopo <jacopo.tissino@gssi.it>"]
+packages = [{include = "matrix_inverse"}]
+
+[tool.poetry.dependencies]
+python = ">=3.8, <3.12"
+pytest = "^7.2.0"
+hypothesis = "^6.56.4"
+numpy = "^1.23.4"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+```
+
+Then, we need to move our code to a folder called `matrix_inverse`.
+Further, for consistency we will move the test code in a folder
+called `tests`.
+Finally, we can install `tox` and create a `tox.ini` file containing
+
+```ini
+[tox]
+skipsdist = true
+envlist = py{38,39,310,311}
+isolated_build = true
+
+[testenv]
+deps = 
+    poetry
+commands =
+    poetry install
+    poetry run pytest {posargs}
+```
+
+Then we are done! We can run `tox` from the shell, which will create 
+virtual environments with our dependencies for python 3.8, 3.9, 3.10 
+and 3.11; it will then run the tests within these.
+
+The output for this is very long, but it ends with 
+
+```bash
+__________________________________ summary ___________________________________
+  py38: commands succeeded
+  py39: commands succeeded
+  py310: commands succeeded
+  py311: commands succeeded
+  congratulations :)
+```
+
+We can check that the system is working properly by trying to exploit
+some functionality that is available only in certain python releases. 
+For example, `tomllib` was added to the standard python libary in version
+3.11; before it one would have had to import it manually.
+So, if without further changes we add a line `import tomllib` 
+to our module or test code, we expect to get an error for versions 
+3.10 and below; indeed, the output is
+
+```bash
+__________________________________ summary ___________________________________
+ERROR:   py38: commands failed
+ERROR:   py39: commands failed
+ERROR:   py310: commands failed
+  py311: commands succeeded
+```
+
+Running such a combination of tests can get expensive, especially as the
+test suite grows, but it may be worth it, especially if we require backward
+compatibility.
+For example, I often use the latest `python` release, but sometimes develop 
+code that will be run on clusters whose installations are only updated 
+irregularly; it is therefore important to be able to easily check that 
+the code is compatible with the version installed there. 
+
+## When to write tests
+
+Writing tests is time-consuming, 
+but once they have been written they are extremely useful. 
+So, when is a good time to write them? 
+
+If we are developing a new feature, a good answer to this is: _before_ writing the 
+code that implements the feature. 
+This practice is known as __test-driven development__ (TDD), and it is more than twenty years
+old. The idea is that writing the test first forces the developer to think about 
+what the thing they are implementing should accomplish.
+
+If this seems hard, that's a feature, not a bug: writing code without being able to 
+formulate a test case for it is indicative of the code being not well thought out, 
+or perhaps of it being too tightly-coupled, as opposed to modular.
+
+This may apply to new code, but often the real situation is that we have a large module
+without any tests: what to do then?
+One approach, which will be showcased in the next chapter ("Code structure"), is to create some 
+__end-to-end__ tests to document the expected behaviour of the code, and then refactor / simplify the 
+code as needed (since it will probably need refactoring).
+
+Another opportunity to write tests is in the event of __bugs__ or problems: if we encounter 
+a failure for a certain input to our code, we can calcify that input as a test case.
+In pytest, the `@pytest.mark.xfail` decorator can help in clarifying: that 
+test is known to be currently failing.
+When the bug is fixed, the test should succeed, and it can be kept in our suite, allowing 
+us to avoid regressing on that fix.
+
+Finally, the kind of test development shown in the previous sections is a sort of 
+"__exploratory testing__", which is yet another context in which tests can be written.
+If we have some functionality which we do not completely understand the behaviour of,
+perhaps because it was written by somebody else, or maybe it even lies in a different
+package. 
+As we are try to make sense of it --- as we would need to anyway --- we can write tests
+cementing our understanding of its behaviour.
+Besides allowing us to clarify our understanding in this exploratory phase, 
+the tests will remain there acting as a safeguard against changes in the functionality,
+in the case that it is externally managed. 
+For example, if we are relying on an external library and it gets an update, 
+we can quickly check whether it breaks our use case.
 
 # Code structure
 
@@ -985,7 +1134,8 @@ but several small simple improvements and refactorings can help in steadily
 improving its usability.
 
 `GWFish` is released as a python package, with some additional helper scripts to 
-run it. [...]
+run it.
+A core point in its functionality, however, is the function `analyzeFisherErrors`.
 
 ## Refactoring `analyzeFisherErrors`
 
