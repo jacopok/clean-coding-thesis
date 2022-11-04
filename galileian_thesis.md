@@ -2055,13 +2055,13 @@ Several improvements are underway for `GWFish`, both in terms of new functionali
 with the current infrastructure) and of the application of the concepts discussed 
 in this thesis.
 
-The main takeaway I hope a reader may have from this thesis is in 
+The main takeaway I hope a reader will have from this thesis is in 
 terms of a sort of "Maslow hierarchy"[^maslow] of software needs.
-The main topics discussed are in rough order of importance:
-if a piece of software is not being properly versioned that is the first problem
+The main topics discussed are in rough order of _urgency_:
+if a piece of software is not being properly _versioned_ that is the first problem
 to be solved, since we could not reliably keep track of any changes applied otherwise.
-The relative importance of testing and documentation is debatable,
-but both are surely more important than cosmetic changes such as the
+The relative importance of _testing_ and _documentation_ is debatable,
+but both are surely more urgent than cosmetic and even _structural_ changes such as the
 ones discussed in the "Refactoring" chapter.
 
 [^maslow]: This is a reference to the notorious Maslow hierarchy of needs for humans,
@@ -2074,7 +2074,7 @@ but there are several steps before it which need to be fulfilled for the
 clever snippet of code to be useful.
 
 Implementing a robust _process_ for the development of a software
-process which is growing large is not simple, but it is definitely worth it, 
+project that is growing large is not simple, but it is definitely worth it, 
 and an initial time investment can have a significant payoff.
 
 # Bibliography
