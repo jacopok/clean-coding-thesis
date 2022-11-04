@@ -497,6 +497,7 @@ $endif$
 $if(has-frontmatter)$
 \mainmatter
 $endif$
+\clearpage
 $body$
 
 $if(has-frontmatter)$
