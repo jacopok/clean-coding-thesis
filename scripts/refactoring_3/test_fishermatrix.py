@@ -36,15 +36,6 @@ def test_fisher_analysis_output(mocker):
         config="detectors.yaml",
     )
 
-    wave, t_of_f = waveforms.hphc_amplitudes(
-        "gwfish_TaylorF2",
-        parameter_values.iloc[0],
-        network.detectors[0].frequencyvector,
-    )
-    signal = detection.projection(
-        parameter_values.iloc[0], network.detectors[0], wave, t_of_f
-    )
-
     network.detectors[0].fisher_matrix[0, :, :] = fishermatrix.FisherMatrix(
         "gwfish_TaylorF2",
         parameter_values.iloc[0],
